@@ -1,0 +1,404 @@
+"""
+NASA Exoplanet Detection - Interactive Streamlit Application
+============================================================
+Interactive web app for detecting exoplanets using Kepler transit data.
+Created for NASA Space Apps Challenge 2025.
+"""
+
+import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import pickle
+import json
+from datetime import datetime
+
+# Page configuration
+st.set_page_config(
+    page_title="NASA Exoplanet Detection",
+    page_icon="🪐",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Custom CSS for better styling
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 3rem;
+        color: #1E3A8A;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+    .sub-header {
+        font-size: 1.2rem;
+        color: #4B5563;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .metric-card {
+        background-color: #F3F4F6;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin: 0.5rem 0;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+@st.cache_resource
+def load_model():
+    """Load trained LightGBM model and preprocessor"""
+    try:
+        # Load LightGBM model from models directory
+        with open('../models/lightgbm_model.pkl', 'rb') as f:
+            model = pickle.load(f)
+
+        # Load metrics
+        with open('../models/model_metrics.json', 'r') as f:
+            metrics = json.load(f)
+
+        # Load preprocessor
+        with open('../data/preprocessing/preprocessor.pkl', 'rb') as f:
+            preprocessor = pickle.load(f)
+
+        return model, metrics, preprocessor
+
+    except Exception as e:
+        st.error(f"Error loading model: {str(e)}")
+        return None, None, None
+
+@st.cache_data
+def load_sample_data():
+    """Load preprocessed data for demonstration"""
+    try:
+        df = pd.read_csv('../data/preprocessing/kepler_koi_preprocessed.csv')
+        X = df.drop('label', axis=1)
+        y = df['label']
+        return X, y
+    except Exception as e:
+        st.error(f"Error loading sample data: {str(e)}")
+        return None, None
+
+def main():
+    # Header
+    st.markdown('<h1 class="main-header">🪐 NASA Exoplanet Detection System</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-header">AI-Powered Detection of Exoplanets from Kepler Transit Data</p>', unsafe_allow_html=True)
+    st.markdown("---")
+
+    # Load model and data
+    model, metrics, preprocessor = load_model()
+    X_data, y_data = load_sample_data()
+
+    if model is None:
+        st.error("Failed to load model. Please ensure model files are in the correct location.")
+        return
+
+    if preprocessor is None:
+        st.error("Failed to load preprocessor.")
+        return
+
+    feature_names = preprocessor['feature_columns']
+
+    # Sidebar
+    with st.sidebar:
+        st.image("https://www.nasa.gov/wp-content/uploads/2023/03/nasa-logo-web-rgb.png", width=200)
+        st.markdown("## NASA Space Apps Challenge 2025")
+        st.markdown("**Challenge:** A World Away: Hunting for Exoplanets with AI")
+        st.markdown("---")
+
+        st.markdown("### LightGBM Model Performance")
+
+        # Display test metrics
+        test_metrics = metrics['metrics']['test']
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Accuracy", f"{test_metrics['accuracy']:.1%}")
+            st.metric("Precision", f"{test_metrics['precision']:.1%}")
+        with col2:
+            st.metric("Recall", f"{test_metrics['recall']:.1%}")
+            st.metric("F1-Score", f"{test_metrics['f1']:.1%}")
+
+        st.metric("ROC-AUC", f"{test_metrics['roc_auc']:.1%}")
+
+        st.markdown("---")
+        st.markdown("### About")
+        st.markdown(f"""
+        This application uses **LightGBM** to classify
+        potential exoplanets from Kepler Space Telescope data.
+
+        **Model:** Gradient Boosting Classifier
+        **Features:** {len(feature_names)} observational features
+        **Accuracy:** {test_metrics['accuracy']:.1%}
+
+        Data leakage has been carefully removed to ensure
+        the model learns from genuine transit signals only.
+        """)
+
+    # Main content tabs
+    tab1, tab2, tab3, tab4 = st.tabs(["🔮 Predictions", "📊 Data Explorer", "📈 Model Performance", "📚 Documentation"])
+
+    with tab1:
+        st.header("Exoplanet Prediction Interface")
+
+        prediction_method = st.radio(
+            "Choose prediction method:",
+            ["Sample Data", "Upload CSV"],
+            help="Manual input not available - model uses 77 specialized features"
+        )
+
+        if prediction_method == "Sample Data":
+            st.subheader("Test with Sample Data")
+
+            if X_data is not None and y_data is not None:
+                sample_idx = st.slider("Select sample index", 0, len(X_data)-1, 0)
+
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.markdown("**Sample Features (first 10):**")
+                    sample = X_data.iloc[sample_idx]
+                    for i, (feat, val) in enumerate(sample.items()):
+                        if i < 10:
+                            st.write(f"- {feat}: {val:.4f}")
+
+                with col2:
+                    if st.button("Classify Sample", type="primary"):
+                        sample_input = sample.values.reshape(1, -1)
+                        prediction = model.predict(sample_input)[0]
+                        probability = model.predict_proba(sample_input)[0]
+                        actual = y_data.iloc[sample_idx]
+
+                        st.markdown("**Results:**")
+                        if prediction == 1:
+                            st.success(f"🌍 Predicted: PLANET (confidence: {probability[1]:.1%})")
+                        else:
+                            st.warning(f"❌ Predicted: NON-PLANET (confidence: {probability[0]:.1%})")
+
+                        if actual == 1:
+                            st.info("Actual: PLANET")
+                        else:
+                            st.info("Actual: NON-PLANET")
+
+                        if prediction == actual:
+                            st.success("✅ Correct prediction!")
+                        else:
+                            st.error("❌ Incorrect prediction")
+
+                        # Confidence gauge
+                        fig_gauge = go.Figure(go.Indicator(
+                            mode="gauge+number",
+                            value=probability[1] * 100,
+                            title={'text': "Planet Likelihood"},
+                            gauge={
+                                'axis': {'range': [None, 100]},
+                                'bar': {'color': "darkgreen" if prediction == 1 else "darkred"},
+                                'steps': [
+                                    {'range': [0, 50], 'color': "lightgray"},
+                                    {'range': [50, 100], 'color': "lightgreen"}
+                                ],
+                                'threshold': {
+                                    'line': {'color': "red", 'width': 4},
+                                    'thickness': 0.75,
+                                    'value': 50
+                                }
+                            }
+                        ))
+                        fig_gauge.update_layout(height=300)
+                        st.plotly_chart(fig_gauge, use_container_width=True)
+
+        else:  # Upload CSV
+            st.subheader("Upload Transit Data")
+            st.info(f"CSV must contain {len(feature_names)} columns: {', '.join(feature_names[:5])}... and {len(feature_names)-5} more")
+
+            uploaded_file = st.file_uploader(
+                "Choose a preprocessed CSV file",
+                type="csv"
+            )
+
+            if uploaded_file is not None:
+                try:
+                    df = pd.read_csv(uploaded_file)
+                    st.write(f"Loaded {len(df)} samples")
+
+                    # Check for required columns
+                    missing_cols = set(feature_names) - set(df.columns)
+                    if missing_cols:
+                        st.error(f"Missing columns: {missing_cols}")
+                    else:
+                        if st.button("Classify All Samples", type="primary"):
+                            # Make predictions
+                            predictions = model.predict(df[feature_names])
+                            probabilities = model.predict_proba(df[feature_names])[:, 1]
+
+                            # Add results to dataframe
+                            df['Prediction'] = ['Planet' if p == 1 else 'Non-Planet' for p in predictions]
+                            df['Planet_Probability'] = probabilities
+
+                            # Display results
+                            st.success(f"Classification complete!")
+                            st.write(f"Planets detected: {sum(predictions)} / {len(predictions)}")
+
+                            # Show results table
+                            st.dataframe(df[['Prediction', 'Planet_Probability'] + feature_names[:5]])
+
+                            # Download results
+                            csv = df.to_csv(index=False)
+                            st.download_button(
+                                label="Download Results as CSV",
+                                data=csv,
+                                file_name=f"exoplanet_predictions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                mime="text/csv"
+                            )
+
+                except Exception as e:
+                    st.error(f"Error processing file: {str(e)}")
+
+    with tab2:
+        st.header("Data Explorer")
+
+        if X_data is not None:
+            st.subheader("Dataset Overview")
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Samples", len(X_data))
+            with col2:
+                planet_count = sum(y_data == 1)
+                st.metric("Planets", planet_count)
+            with col3:
+                st.metric("Non-Planets", len(y_data) - planet_count)
+
+            # Feature statistics
+            st.subheader("Feature Statistics (first 10 features)")
+            stats = X_data.iloc[:, :10].describe()
+            st.dataframe(stats.style.format("{:.4f}"))
+
+            # Feature distributions
+            st.subheader("Feature Distributions (first 4 features)")
+            fig = make_subplots(rows=2, cols=2, subplot_titles=X_data.columns[:4].tolist())
+
+            for idx, col in enumerate(X_data.columns[:4]):
+                row = idx // 2 + 1
+                col_pos = idx % 2 + 1
+                fig.add_trace(
+                    go.Histogram(x=X_data[col], name=col, showlegend=False),
+                    row=row, col=col_pos
+                )
+
+            fig.update_layout(height=600, title_text="Feature Distributions")
+            st.plotly_chart(fig, use_container_width=True)
+
+    with tab3:
+        st.header("Model Performance Analysis")
+
+        # Metrics comparison across splits
+        st.subheader("Performance Across Data Splits")
+
+        splits_df = pd.DataFrame({
+            'Split': ['Train', 'Validation', 'Test'],
+            'Accuracy': [metrics['metrics'][s]['accuracy'] for s in ['train', 'validation', 'test']],
+            'F1-Score': [metrics['metrics'][s]['f1'] for s in ['train', 'validation', 'test']],
+            'ROC-AUC': [metrics['metrics'][s]['roc_auc'] for s in ['train', 'validation', 'test']]
+        })
+
+        fig_splits = px.line(splits_df, x='Split', y=['Accuracy', 'F1-Score', 'ROC-AUC'],
+                            title='Model Performance Across Splits',
+                            markers=True)
+        fig_splits.update_layout(height=400, yaxis_title="Score", yaxis_range=[0.8, 1.0])
+        st.plotly_chart(fig_splits, use_container_width=True)
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.subheader("Test Set Metrics")
+            test_metrics = metrics['metrics']['test']
+            metrics_df = pd.DataFrame({
+                'Metric': ['Accuracy', 'Precision', 'Recall', 'F1-Score', 'ROC-AUC'],
+                'Score': [
+                    test_metrics['accuracy'],
+                    test_metrics['precision'],
+                    test_metrics['recall'],
+                    test_metrics['f1'],
+                    test_metrics['roc_auc']
+                ]
+            })
+
+            fig_metrics = px.bar(
+                metrics_df, x='Metric', y='Score',
+                title='Test Set Performance',
+                color='Score',
+                color_continuous_scale='viridis'
+            )
+            fig_metrics.update_layout(height=400, yaxis_range=[0, 1])
+            st.plotly_chart(fig_metrics, use_container_width=True)
+
+        with col2:
+            st.subheader("Model Information")
+            st.json(metrics['model_params'])
+
+    with tab4:
+        st.header("Documentation")
+
+        st.markdown(f"""
+        ## About This Project
+
+        This project was developed for the **NASA Space Apps Challenge 2025**, specifically for the
+        "A World Away: Hunting for Exoplanets with AI" challenge.
+
+        ### Dataset
+        - **Source**: NASA Exoplanet Archive - Kepler Objects of Interest (KOI)
+        - **Size**: 9,564 transit signals
+        - **Classes**: Planets (CONFIRMED + CANDIDATE) vs Non-Planets (FALSE POSITIVE)
+        - **Features**: {len(feature_names)} observational features after data leakage removal
+
+        ### Model Architecture
+        - **Algorithm**: LightGBM (Light Gradient Boosting Machine)
+        - **Type**: Binary classification (Planet vs Non-Planet)
+        - **Data Split**: 70% train, 10% validation, 20% test
+        - **Features**: {len(feature_names)} features including:
+          - Transit signals (period, depth, duration, impact)
+          - Stellar properties (temperature, radius, mass, surface gravity)
+          - Photometry (magnitudes in various bands)
+          - Signal statistics and centroid offsets
+
+        ### Data Leakage Prevention
+        We removed 63 columns that could leak classification information:
+        - False positive flags (koi_fpflag_*)
+        - Derived planet properties (koi_prad, koi_teq, koi_insol)
+        - Disposition scores and vetting metadata
+        - Model fitting outputs
+
+        This ensures the model learns from genuine observational data only.
+
+        ### Performance (Test Set)
+        - **Accuracy**: {test_metrics['accuracy']:.1%}
+        - **Precision**: {test_metrics['precision']:.1%}
+        - **Recall**: {test_metrics['recall']:.1%}
+        - **F1-Score**: {test_metrics['f1']:.1%}
+        - **ROC-AUC**: {test_metrics['roc_auc']:.1%}
+
+        ### How to Use
+        1. **Sample Data**: Test with samples from the preprocessed dataset
+        2. **Upload CSV**: Upload preprocessed transit data with {len(feature_names)} features
+
+        ### Team
+        - Developed for NASA Space Apps Challenge 2025
+        - Challenge: A World Away - Hunting for Exoplanets with AI
+
+        ### References
+        - NASA Exoplanet Archive: https://exoplanetarchive.ipac.caltech.edu/
+        - Kepler Mission: https://www.nasa.gov/mission_pages/kepler/
+        - LightGBM: https://lightgbm.readthedocs.io/
+
+        ### Citation
+        ```
+        NASA Exoplanet Archive (2025)
+        DOI: http://doi.org/10.17616/R3X31K
+        ```
+        """)
+
+if __name__ == "__main__":
+    main()
