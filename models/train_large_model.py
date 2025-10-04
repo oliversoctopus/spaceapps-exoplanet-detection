@@ -48,44 +48,51 @@ def split_data(X, y, test_size=0.2, val_size=0.1, random_state=42):
     return X_train, X_val, X_test, y_train, y_val, y_test
 
 def train_large_model(X_train, y_train, X_val, y_val):
-    """Train large LightGBM model with extended capacity"""
-    print("\nTraining LARGE LightGBM model...")
+    """Train large LightGBM model with reduced overfitting"""
+    print("\nTraining LARGE LightGBM model (anti-overfitting config)...")
     print("  Configuration:")
-    print("    - n_estimators: 500 (vs 200 baseline)")
-    print("    - max_depth: 10 (vs 7 baseline)")
-    print("    - num_leaves: 63 (vs 31 baseline)")
-    print("    - learning_rate: 0.03 (vs 0.05 baseline)")
-    print("    - min_child_samples: 10 (vs 20 baseline)")
+    print("    - n_estimators: 500 (with early stopping)")
+    print("    - max_depth: 8 (reduced from 10)")
+    print("    - num_leaves: 50 (reduced from 63)")
+    print("    - learning_rate: 0.03")
+    print("    - min_child_samples: 30 (increased from 10)")
+    print("    - subsample: 0.7 (reduced from 0.8)")
+    print("    - colsample_bytree: 0.7 (reduced from 0.8)")
+    print("    - reg_alpha: 1.0 (L1, increased from 0.1)")
+    print("    - reg_lambda: 1.0 (L2, increased from 0.1)")
+    print("    - min_split_gain: 0.1 (minimum loss reduction)")
     print("    - Early stopping: 50 rounds")
 
     model = LGBMClassifier(
-        n_estimators=500,           # Increased from 200
-        learning_rate=0.03,         # Decreased for more gradual learning
-        max_depth=10,               # Increased from 7
-        num_leaves=63,              # Increased from 31
-        min_child_samples=10,       # Decreased from 20 (more sensitive)
-        subsample=0.8,
-        colsample_bytree=0.8,
-        reg_alpha=0.1,              # L1 regularization
-        reg_lambda=0.1,             # L2 regularization
+        n_estimators=500,
+        learning_rate=0.03,
+        max_depth=8,                # Reduced to prevent deep overfitting
+        num_leaves=50,              # Reduced from 63
+        min_child_samples=30,       # Increased from 10 (more conservative)
+        subsample=0.7,              # Reduced for more regularization
+        colsample_bytree=0.7,       # Reduced for more regularization
+        reg_alpha=1.0,              # Strong L1 regularization
+        reg_lambda=1.0,             # Strong L2 regularization
+        min_split_gain=0.1,         # Require meaningful gain for splits
+        min_child_weight=0.01,      # Minimum sum of instance weight in child
         random_state=42,
         verbose=-1
     )
 
     print("\n  Training in progress...")
+    from lightgbm import early_stopping
+
     model.fit(
         X_train, y_train,
         eval_set=[(X_val, y_val)],
         eval_metric='auc',
-        callbacks=[
-            # Early stopping if validation doesn't improve for 50 rounds
-        ]
+        callbacks=[early_stopping(stopping_rounds=50)]
     )
 
     # Get best iteration
     best_iteration = model.best_iteration_ if hasattr(model, 'best_iteration_') else model.n_estimators
     print(f"\n  [OK] Training complete!")
-    print(f"  Best iteration: {best_iteration}")
+    print(f"  Best iteration: {best_iteration}/{model.n_estimators}")
 
     return model
 
