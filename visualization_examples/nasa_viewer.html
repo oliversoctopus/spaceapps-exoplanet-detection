@@ -3,236 +3,238 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Exoplanet Data Explorer</title>
+    <title>ExoHunter System Visualizer</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
     <style>
-        html {
-            height: 100%;
+        :root {
+            --primary-bg: #0c1424;
+            --secondary-bg: #1a2336;
+            --text-primary: #e0e7ff;
+            --text-secondary: #a7b3d1;
+            --accent-color: #60a5fa;
+            --border-color: #313c57;
         }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #111827;
-            color: #F3F4F6;
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--primary-bg);
+            color: var(--text-primary);
             margin: 0;
-            padding: 20px;
-            box-sizing: border-box;
             overflow: hidden;
+        }
+        #starfield {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
             height: 100%;
-            display: flex;
-            flex-direction: column;
+            z-index: -1;
         }
-        h1,h2{text-align:center;color:#93c5fd;text-shadow:0 0 5px #60a5fa}
-        .tab-container{display:flex;justify-content:center;margin-bottom:20px;border-bottom:2px solid #374151}
-        .tab-button{padding:12px 25px;cursor:pointer;border:none;background-color:transparent;color:#9CA3AF;font-size:1.1em;transition:all .3s ease;border-bottom:3px solid transparent}
-        .tab-button.active{color:#60a5fa;border-bottom:3px solid #60a5fa}
-        .content-section{
-            display:none;
-            flex-direction:row;
-            flex-wrap:wrap;
-            justify-content:center;
-            gap:20px;
-            animation:fadeIn .5s ease;
-            flex-grow: 1;
-            min-height: 0;
+        .main-container {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            height: 100vh;
+        }
+        .data-panel {
+            background-color: var(--secondary-bg);
+            padding: 25px;
+            border-right: 1px solid var(--border-color);
             overflow-y: auto;
+            z-index: 1;
         }
-        .content-section.active{display:flex}
-        @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-        
-        .card {
-            background-color: #1F2937;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,.4);
-            flex: 1;
-            min-width: 400px;
-            max-width: 600px;
-            display: flex;
-            flex-direction: column;
-        }
-        .chart-container {
+        .viewer-panel {
             position: relative;
-            flex-grow: 1;
-            min-height: 0;
         }
-
-        .card h2{margin-top:0;border-bottom:1px solid #4B5563;padding-bottom:10px}
-        #viewer-container-kepler,#viewer-container-tess{width:100%;height:400px;border-radius:8px;cursor:grab}
-        .viewer-info{text-align:center;margin-top:15px;color:#D1D5DB;font-size:1.1em;height:40px}
+        #viewer-container {
+            width: 100%;
+            height: 100%;
+            background-color: transparent;
+        }
+        h1, h2 {
+            font-weight: 300;
+            text-align: left;
+            color: white;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-top: 0;
+        }
+        h2 { font-size: 1.5em; }
+        .selector-group { margin: 25px 0; }
+        label { display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 0.9em; }
+        select { width: 100%; padding: 10px; border-radius: 5px; background-color: var(--primary-bg); color: var(--text-primary); border: 1px solid var(--border-color); font-size: 1em; }
+        #planet-info p { margin: 10px 0; line-height: 1.6; color: var(--text-secondary); }
+        #planet-info strong { color: var(--text-primary); }
+        .viewer-text { position: absolute; bottom: 20px; left: 20px; color: white; background: rgba(0,0,0,0.5); padding: 8px 12px; border-radius: 5px; font-size: 1em; pointer-events: none; backdrop-filter: blur(5px); }
     </style>
 </head>
 <body>
-
-    <h1>NASA Exoplanet Data Explorer</h1>
-    <div class="tab-container">
-        <button class="tab-button active" onclick="showTab('kepler')">Kepler</button>
-        <button class="tab-button" onclick="showTab('tess')">TESS</button>
-    </div>
-    <div id="kepler" class="content-section active">
-        <div class="card">
-            <h2>Planet Types Discovered by Kepler</h2>
-            <div class="chart-container">
-                <canvas id="keplerChart"></canvas>
+    <canvas id="starfield"></canvas>
+    <div class="main-container">
+        <div class="data-panel">
+            <h1>ExoHunter</h1>
+            <div class="selector-group">
+                <label for="planet-select">Kepler Object of Interest</label>
+                <select id="planet-select" onchange="updateVisualization()"></select>
             </div>
+            <div id="planet-info"></div>
         </div>
-        <div class="card">
-            <h2 id="viewer-title-kepler">3D Model Viewer</h2>
-            <div id="viewer-container-kepler"></div>
-            <div id="viewer-info-kepler" class="viewer-info">Click a bar on the chart to view a model.</div>
-        </div>
-    </div>
-    <div id="tess" class="content-section">
-        <div class="card">
-            <h2>Planet Types Discovered by TESS</h2>
-            <div class="chart-container">
-                <canvas id="tessChart"></canvas>
-            </div>
-        </div>
-        <div class="card">
-            <h2 id="viewer-title-tess">3D Model Viewer</h2>
-            <div id="viewer-container-tess"></div>
-            <div id="viewer-info-tess" class="viewer-info">Click a bar on the chart to view a model.</div>
+        <div class="viewer-panel">
+            <div id="viewer-container"></div>
+            <div id="viewer-title" class="viewer-text">Select a system to visualize</div>
         </div>
     </div>
 
 <script>
-    const keplerData = [{"type": "Gas Giant", "count": 772, "avg_radius": 74.26733652085493}, {"type": "Neptune-like", "count": 1690, "avg_radius": 5.986235083739644}, {"type": "Super Earth", "count": 12466, "avg_radius": 2.4554009696093373}, {"type": "Terrestrial", "count": 6561, "avg_radius": 1.2161419472900472}];
-    const tessData = [{"type": "Gas Giant", "count": 439, "avg_radius": 13.265404409088838}, {"type": "Neptune-like", "count": 254, "avg_radius": 6.98897170484252}, {"type": "Super Earth", "count": 750, "avg_radius": 2.57999271588}, {"type": "Terrestrial", "count": 232, "avg_radius": 1.238601194612069}];
-
-    const planetColors = {
-        'Gas Giant':  0xD2B48C, // Tan
-        'Super Earth': 0xAF4425, // Burnt Sienna
-        'Neptune-like': 0x5B92E5, // Cornflower Blue
-        'Terrestrial': 0x9F2B00, // Rust
-        'Earth': 0x4F7CAC,      // Steel Blue
+    const exoplanetData = {
+        "Kepler-22 b (KOI-87.01)":    { koi_prad: 2.38,  koi_srad: 0.98, koi_steff: 5518, koi_period: 289.9, koi_teq: 262 },
+        "Kepler-62 f (KOI-701.04)":   { koi_prad: 1.41,  koi_srad: 0.64, koi_steff: 4925, koi_period: 267.3, koi_teq: 208 },
+        "Kepler-186 f (KOI-571.05)":  { koi_prad: 1.17,  koi_srad: 0.52, koi_steff: 3755, koi_period: 129.9, koi_teq: 188 },
+        "Kepler-452 b (KOI-7016.01)": { koi_prad: 1.63,  koi_srad: 1.11, koi_steff: 5757, koi_period: 384.8, koi_teq: 265 }
     };
 
-    const viewers = {};
-    const charts = {};
+    const viewer = {};
 
-    window.onload = function() {
-        const keplerChartData = processSummaryData(keplerData);
-        viewers.kepler = setup3DViewer('viewer-container-kepler');
-        createChart('keplerChart', keplerChartData, (type) => {
-            const avgRadius = keplerChartData.avgRadii[type];
-            update3DModel(viewers.kepler, type, avgRadius, 'kepler');
-        });
+    document.addEventListener('DOMContentLoaded', () => {
+        populateSelector();
+        init3DViewer();
+        updateVisualization();
+        window.addEventListener('resize', onWindowResize);
+    });
 
-        const tessChartData = processSummaryData(tessData);
-        viewers.tess = setup3DViewer('viewer-container-tess');
-        createChart('tessChart', tessChartData, (type) => {
-            const avgRadius = tessChartData.avgRadii[type];
-            update3DModel(viewers.tess, type, avgRadius, 'tess');
-        });
+    function populateSelector() {
+        const selector = document.getElementById('planet-select');
+        for (const name in exoplanetData) {
+            selector.add(new Option(name, name));
+        }
+    }
+
+    function updateVisualization() {
+        const selectedPlanetName = document.getElementById('planet-select').value;
+        const data = exoplanetData[selectedPlanetName];
+        displayPlanetInfo(selectedPlanetName, data);
+        createSceneObjects(selectedPlanetName, data);
+    }
+    
+    function displayPlanetInfo(name, data) {
+        document.getElementById('planet-info').innerHTML = `
+            <h2>${name}</h2>
+            <p><strong>Planet Radius:</strong> ${data.koi_prad.toFixed(2)}x Earth</p>
+            <p><strong>Host Star Radius:</strong> ${data.koi_srad.toFixed(2)}x Sun</p>
+            <p><strong>Host Star Temp:</strong> ${data.koi_steff} K</p>
+            <p><strong>Planet Temp (Equilibrium):</strong> ${data.koi_teq} K</p>
+            <p><strong>Orbital Period:</strong> ${data.koi_period} days</p>
+        `;
+    }
+
+    function init3DViewer() {
+        const container = document.getElementById('viewer-container');
+        viewer.scene = new THREE.Scene();
+        viewer.camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 2000);
+        viewer.camera.position.z = 70;
+        
+        viewer.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        viewer.renderer.setSize(container.clientWidth, container.clientHeight);
+        viewer.renderer.setPixelRatio(window.devicePixelRatio);
+        viewer.renderer.autoClear = false;
+        container.appendChild(viewer.renderer.domElement);
+
+        viewer.controls = new THREE.OrbitControls(viewer.camera, viewer.renderer.domElement);
+        viewer.controls.enableDamping = true;
+        
+        viewer.starfieldScene = new THREE.Scene();
+        const starVertices = [];
+        for (let i = 0; i < 10000; i++) {
+            starVertices.push(THREE.MathUtils.randFloatSpread(2000), THREE.MathUtils.randFloatSpread(2000), THREE.MathUtils.randFloatSpread(2000));
+        }
+        const starGeometry = new THREE.BufferGeometry();
+        starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+        const starMaterial = new THREE.PointsMaterial({ color: 0xaaaaaa, size: 0.2 });
+        const stars = new THREE.Points(starGeometry, starMaterial);
+        viewer.starfieldScene.add(stars);
 
         animate();
-    };
-
-    function processSummaryData(summaryArray) {
-        summaryArray.sort((a, b) => a.type.localeCompare(b.type));
-        const labels = summaryArray.map(item => item.type);
-        const counts = summaryArray.map(item => item.count);
-        const avgRadii = {};
-        summaryArray.forEach(item => {
-            avgRadii[item.type] = item.avg_radius;
-        });
-        return { labels, counts, avgRadii };
     }
 
-    function createChart(canvasId, chartData, onClickCallback) {
-        const ctx = document.getElementById(canvasId).getContext('2d');
-        return new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: chartData.labels,
-                datasets: [{
-                    label: 'Number of Planets Found',
-                    data: chartData.counts,
-                    backgroundColor: 'rgba(96, 165, 250, 0.6)',
-                    borderColor: 'rgba(96, 165, 250, 1)',
-                    borderWidth: 1,
-                    borderRadius: 4,
-                }]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                        ticks: {
-                            color: '#9CA3AF',
-                            callback: function(value) {
-                                if (value >= 1000) {
-                                    return (value / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
-                                }
-                                return value;
-                            }
-                        }
-                    },
-                    x: { ticks: { color: '#D1D5DB' }, grid: { display: false } }
-                },
-                onClick: (event, elements) => {
-                    if (elements.length > 0) {
-                        const type = chartData.labels[elements[0].index];
-                        onClickCallback(type);
-                    }
-                }
-            }
-        });
+    function getStarProperties(temp) {
+        if (temp > 7500) return { color: 0xa9c1ff, intensity: 2.5 };
+        if (temp > 6000) return { color: 0xfff4e8, intensity: 2 };
+        if (temp > 5200) return { color: 0xfff0a1, intensity: 1.8 };
+        if (temp > 3700) return { color: 0xffcc6f, intensity: 1.5 };
+        return { color: 0xff8c5a, intensity: 1.2 };
     }
-
-    function setup3DViewer(containerId){const container=document.getElementById(containerId);const scene=new THREE.Scene();const camera=new THREE.PerspectiveCamera(75,container.clientWidth/container.clientHeight,.1,1e3);camera.position.z=5;const renderer=new THREE.WebGLRenderer({antialias:!0});renderer.setSize(container.clientWidth,container.clientHeight);renderer.setPixelRatio(window.devicePixelRatio);container.appendChild(renderer.domElement);const ambientLight=new THREE.AmbientLight(16777215,.4);scene.add(ambientLight);const pointLight=new THREE.PointLight(16777215,1);pointLight.position.set(5,5,5);scene.add(pointLight);const controls=new THREE.OrbitControls(camera,renderer.domElement);controls.enableDamping=!0;controls.dampingFactor=.05;const viewer={scene,camera,renderer,controls,container,activeMeshes:[]};return window.addEventListener("resize",()=>onWindowResize(viewer),!1),viewer}
     
-    function update3DModel(viewer, type, radius, datasetKey) {
-        viewer.activeMeshes.forEach(mesh => viewer.scene.remove(mesh));
-        viewer.activeMeshes = [];
-        const maxDisplayRadius = 2, earthDisplayRadius = 0.5;
-        const planetDisplayRadius = Math.min(maxDisplayRadius, earthDisplayRadius * radius);
-        const planetGeometry = new THREE.SphereGeometry(planetDisplayRadius, 64, 64);
-        const planetMaterial = new THREE.MeshStandardMaterial({
-            color: planetColors[type],
-            roughness: 0.5
+    function createSceneObjects(name, data) {
+        // --- START OF CHANGES ---
+        
+        if (viewer.activeGroup) {
+            viewer.scene.remove(viewer.activeGroup);
+        }
+        viewer.activeGroup = new THREE.Group();
+        const starProps = getStarProperties(data.koi_steff);
+
+        // Create the star with a simple, glowing color material
+        const starRadius = data.koi_srad * 15;
+        const starGeometry = new THREE.SphereGeometry(starRadius, 64, 64);
+        const starMaterial = new THREE.MeshBasicMaterial({
+            color: starProps.color
+        });
+        const starMesh = new THREE.Mesh(starGeometry, starMaterial);
+        
+        // Create the planet with a simple, standard material color
+        const planetRadius = data.koi_prad;
+        const planetGeometry = new THREE.SphereGeometry(planetRadius, 32, 32);
+        const planetMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x4f8a8b, // A nice teal color for the planet
+            roughness: 0.8, 
+            metalness: 0.1 
         });
         const planetMesh = new THREE.Mesh(planetGeometry, planetMaterial);
-        planetMesh.position.x = -planetDisplayRadius - 0.5;
-        const earthGeometry = new THREE.SphereGeometry(earthDisplayRadius, 64, 64);
-        const earthMaterial = new THREE.MeshStandardMaterial({
-            color: planetColors.Earth,
-            roughness: 0.5
-        });
-        const earthMesh = new THREE.Mesh(earthGeometry, earthMaterial);
-        earthMesh.position.x = earthDisplayRadius + 0.5;
-        viewer.scene.add(planetMesh);
-        viewer.scene.add(earthMesh);
-        viewer.activeMeshes.push(planetMesh, earthMesh);
-        document.getElementById(`viewer-title-${datasetKey}`).innerText = `3D Model: ${type}`;
-        document.getElementById(`viewer-info-${datasetKey}`).innerText = `${type} (left, avg. radius: ${radius.toFixed(2)}x Earth) vs. Earth (right)`;
+        
+        // Add a light source inside the star so it illuminates the planet
+        const mainLight = new THREE.PointLight(0xffffff, starProps.intensity, 1000);
+        starMesh.add(mainLight);
+
+        // NOTE: Corona, lens flare, and texture loading have been removed.
+
+        const separation = starRadius + planetRadius + 20;
+        starMesh.position.x = -separation / 2;
+        planetMesh.position.x = separation / 2;
+
+        viewer.activeGroup.add(starMesh, planetMesh);
+        viewer.scene.add(viewer.activeGroup);
+        document.getElementById('viewer-title').innerText = `System View: ${name}`;
+
+        // --- END OF CHANGES ---
     }
 
-    function animate(){requestAnimationFrame(animate);for(const key in viewers){const viewer=viewers[key];viewer.controls.update(),viewer.activeMeshes.forEach(mesh=>{mesh.rotation.y+=.002}),viewer.renderer.render(viewer.scene,viewer.camera)}}
-    
-    function onWindowResize(viewer){
-        if (!viewer.container.clientWidth || !viewer.container.clientHeight) return;
-        viewer.camera.aspect=viewer.container.clientWidth/viewer.container.clientHeight;
-        viewer.camera.updateProjectionMatrix();
-        viewer.renderer.setSize(viewer.container.clientWidth,viewer.container.clientHeight);
-    }
-    
-    function showTab(tabName){
-        document.querySelectorAll(".content-section").forEach(section=>{section.classList.remove("active")});
-        document.querySelectorAll(".tab-button").forEach(button=>{button.classList.remove("active")});
-        document.getElementById(tabName).classList.add("active");
-        document.querySelector(`.tab-button[onclick="showTab('${tabName}')"]`).classList.add("active");
+    let clock = new THREE.Clock();
+    function animate() {
+        requestAnimationFrame(animate);
+        const delta = clock.getDelta();
+        viewer.controls.update();
+
+        if (viewer.activeGroup) {
+            // REMOVED: Texture animation is no longer needed
+            viewer.activeGroup.children[0].rotation.y += delta * 0.02; // Star rotation
+            viewer.activeGroup.children[1].rotation.y += delta * 0.1;  // Planet rotation
+        }
         
-        // This resizes the 3D viewer for the newly visible tab.
-        onWindowResize(viewers[tabName]);
+        viewer.renderer.clear();
+        viewer.renderer.render(viewer.starfieldScene, viewer.camera);
+        viewer.renderer.clearDepth();
+        viewer.renderer.render(viewer.scene, viewer.camera);
+    }
+
+    function onWindowResize() {
+        if (!viewer.camera) return;
+        const container = document.getElementById('viewer-container');
+        viewer.camera.aspect = container.clientWidth / container.clientHeight;
+        viewer.camera.updateProjectionMatrix();
+        viewer.renderer.setSize(container.clientWidth, container.clientHeight);
     }
 </script>
-
 </body>
 </html>

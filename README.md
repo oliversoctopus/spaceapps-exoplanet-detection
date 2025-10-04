@@ -17,6 +17,8 @@ This project automates the detection of exoplanets from transit signals in the K
 - **High-Performance ML Model**: LightGBM classifier achieving 90.3% F1-score and 97.1% ROC-AUC
 - **Data Leakage Prevention**: Rigorous removal of 63 leakage columns for genuine learning
 - **Interactive Web Application**: Streamlit-based UI for real-time predictions
+- **3D Solar System Visualization**: Three.js-powered interactive visualization of exoplanet systems
+- **SHAP Explainability**: Feature importance analysis for individual predictions
 - **Comprehensive Data Pipeline**: Automated download, preprocessing, and model training
 - **Visualization Dashboard**: Interactive plots for data exploration and model interpretation
 
@@ -135,6 +137,8 @@ This downloads the complete Kepler KOI dataset (153 columns) from NASA Exoplanet
    - Classification (Planet/Non-Planet)
    - Confidence score
    - Probability gauge visualization
+   - 3D interactive solar system visualization (Three.js)
+   - SHAP feature importance waterfall plots
    - Model performance metrics
 
 ### Python API

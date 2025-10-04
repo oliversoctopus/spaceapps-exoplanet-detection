@@ -16,6 +16,7 @@ import json
 from datetime import datetime
 import shap
 import matplotlib.pyplot as plt
+import streamlit.components.v1 as components
 
 # Page configuration
 st.set_page_config(
@@ -175,6 +176,168 @@ def classify_star_by_temp(temp_kelvin):
     else:
         return 'M-type', '#FF4500'  # Red
 
+def create_threejs_visualization(system_data, view_mode='system'):
+    """Create Three.js HTML visualization for solar system"""
+
+    planet_radius = system_data.get('planet_radius', 1.0)
+    star_radius = system_data.get('star_radius', 1.0)
+    star_temp = system_data.get('star_temp', 5778)
+
+    # Handle missing data
+    if pd.isna(planet_radius):
+        planet_radius = 1.0
+    if pd.isna(star_radius):
+        star_radius = 1.0
+    if pd.isna(star_temp):
+        star_temp = 5778
+
+    # Determine planet color based on size
+    if planet_radius < 1.5:
+        planet_color = '0x9F2B00'  # Terrestrial
+    elif planet_radius < 4:
+        planet_color = '0xAF4425'  # Super Earth
+    elif planet_radius < 10:
+        planet_color = '0x5B92E5'  # Neptune-like
+    else:
+        planet_color = '0xD2B48C'  # Gas Giant
+
+    html_code = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+        <style>
+            body {{ margin: 0; overflow: hidden; background: #0a0a0a; }}
+            #container {{ width: 100%; height: 600px; background: #000; }}
+        </style>
+    </head>
+    <body>
+        <div id="container"></div>
+        <script>
+            console.log('Three.js script starting...');
+            console.log('THREE object:', typeof THREE);
+
+            const container = document.getElementById('container');
+            console.log('Container dimensions:', container.clientWidth, container.clientHeight);
+
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 2000);
+            camera.position.set(0, 0, 100);
+            camera.lookAt(0, 0, 0);
+
+            console.log('Camera created at:', camera.position);
+
+            const renderer = new THREE.WebGLRenderer({{ antialias: true, alpha: true }});
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.autoClear = false;
+            container.appendChild(renderer.domElement);
+
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+
+            // Starfield background
+            const starfieldScene = new THREE.Scene();
+            const starVertices = [];
+            for (let i = 0; i < 10000; i++) {{
+                starVertices.push(
+                    THREE.MathUtils.randFloatSpread(2000),
+                    THREE.MathUtils.randFloatSpread(2000),
+                    THREE.MathUtils.randFloatSpread(2000)
+                );
+            }}
+            const starGeometry = new THREE.BufferGeometry();
+            starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+            const starMaterial = new THREE.PointsMaterial({{ color: 0xaaaaaa, size: 0.2 }});
+            const stars = new THREE.Points(starGeometry, starMaterial);
+            starfieldScene.add(stars);
+
+            // Get star properties based on temperature
+            function getStarProperties(temp) {{
+                if (temp > 7500) return {{ color: 0xa9c1ff, intensity: 2.5 }};
+                if (temp > 6000) return {{ color: 0xfff4e8, intensity: 2 }};
+                if (temp > 5200) return {{ color: 0xfff0a1, intensity: 1.8 }};
+                if (temp > 3700) return {{ color: 0xffcc6f, intensity: 1.5 }};
+                return {{ color: 0xff8c5a, intensity: 1.2 }};
+            }}
+
+            const activeGroup = new THREE.Group();
+            const starProps = getStarProperties({star_temp});
+
+            // Create star
+            const starRadius = {star_radius} * 15;
+            const starGeometry = new THREE.SphereGeometry(starRadius, 64, 64);
+            const starMaterial = new THREE.MeshBasicMaterial({{ color: starProps.color }});
+            const starMesh = new THREE.Mesh(starGeometry, starMaterial);
+
+            // Create planet
+            const planetRadius = {planet_radius};
+            const planetGeometry = new THREE.SphereGeometry(planetRadius, 32, 32);
+            const planetMaterial = new THREE.MeshStandardMaterial({{
+                color: {planet_color},
+                roughness: 0.8,
+                metalness: 0.1
+            }});
+            const planetMesh = new THREE.Mesh(planetGeometry, planetMaterial);
+
+            // Add light source inside the star
+            const mainLight = new THREE.PointLight(0xffffff, starProps.intensity, 1000);
+            starMesh.add(mainLight);
+
+            // Add ambient light so objects are visible
+            const ambientLight = new THREE.AmbientLight(0x404040, 1);
+            scene.add(ambientLight);
+
+            const separation = starRadius + planetRadius + 20;
+            starMesh.position.x = -separation / 2;
+            planetMesh.position.x = separation / 2;
+
+            activeGroup.add(starMesh, planetMesh);
+            scene.add(activeGroup);
+
+            console.log('Star radius:', starRadius);
+            console.log('Planet radius:', planetRadius);
+            console.log('Separation:', separation);
+            console.log('Objects added to scene');
+
+            // Add a bright test sphere at origin to verify rendering
+            const testGeom = new THREE.SphereGeometry(5, 32, 32);
+            const testMat = new THREE.MeshBasicMaterial({{ color: 0xff0000 }});
+            const testSphere = new THREE.Mesh(testGeom, testMat);
+            scene.add(testSphere);
+            console.log('Test red sphere added at origin');
+
+            // Animation loop
+            const clock = new THREE.Clock();
+            function animate() {{
+                requestAnimationFrame(animate);
+                const delta = clock.getDelta();
+                controls.update();
+
+                activeGroup.children[0].rotation.y += delta * 0.02; // Star rotation
+                activeGroup.children[1].rotation.y += delta * 0.1;  // Planet rotation
+
+                renderer.clear();
+                renderer.render(starfieldScene, camera);
+                renderer.clearDepth();
+                renderer.render(scene, camera);
+            }}
+            animate();
+
+            // Handle window resize
+            window.addEventListener('resize', () => {{
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            }});
+        </script>
+    </body>
+    </html>
+    """
+
+    return html_code
+
 def create_solar_system_view(system_data, zoom_level='system'):
     """Create interactive solar system visualization with star and planet"""
 
@@ -288,37 +451,39 @@ def create_solar_system_view(system_data, zoom_level='system'):
         title = f'{planet_type} Exoplanet vs Earth'
 
     else:  # system view
-        # Full solar system view
-        # Scale everything up by 10x to make it easier to see
-        scale_factor = 10.0
+        # Full solar system view - use semi-fixed display distance
+        star_display_radius = star_radius  # Use actual star radius for variation
 
-        star_display_radius = 1.0 * scale_factor
-        planet_display_radius = (planet_radius * 0.00917) / star_radius
+        # Calculate actual planet radius ratio and scale for visibility
+        # Convert planet radius (Earth radii) to same units as star (solar radii)
+        planet_radius_in_solar = planet_radius * 0.00917  # Earth radii to solar radii
+        planet_display_radius = planet_radius_in_solar
 
-        # Convert AU to solar radii for proper scaling (1 AU = 215 solar radii)
-        distance_in_solar_radii = orbital_distance * 215.0
-        distance_display = (distance_in_solar_radii / star_radius) * scale_factor
+        # Enhance planet size for visibility (multiply by 10 so we can see it)
+        # but keep it proportional to actual size
+        planet_display_radius = planet_display_radius * 10.0
 
-        # Ensure planet is outside the star
-        min_distance = star_display_radius + 0.5 * scale_factor
-        distance_display = max(distance_display, min_distance)
+        # Cap planet at 50% of star size to keep it reasonable
+        planet_display_radius = min(planet_display_radius, star_display_radius * 0.5)
 
-        # Make planet visible - increase size by 10x from previous (0.05 -> 0.5)
-        # Ensure it's always smaller than star
-        planet_display_radius = min(planet_display_radius * 0.5, star_display_radius * 0.3) * scale_factor
-        planet_display_radius = max(planet_display_radius, 0.2 * scale_factor)  # Minimum for visibility
+        # Minimum size for visibility
+        planet_display_radius = max(planet_display_radius, 0.05)
+
+        # Display distance scales with square root of star size
+        # This makes larger stars appear bigger without making orbit too large
+        distance_display = np.sqrt(star_display_radius) * 2.5
 
         # Star sphere (at origin)
         x_star = star_display_radius * np.outer(np.cos(u), np.sin(v))
         y_star = star_display_radius * np.outer(np.sin(u), np.sin(v))
         z_star = star_display_radius * np.outer(np.ones(np.size(u)), np.cos(v))
 
-        # Planet sphere (at orbital distance)
+        # Planet sphere (at fixed display distance)
         x_planet = planet_display_radius * np.outer(np.cos(u), np.sin(v)) + distance_display
         y_planet = planet_display_radius * np.outer(np.sin(u), np.sin(v))
         z_planet = planet_display_radius * np.outer(np.ones(np.size(u)), np.cos(v))
 
-        # Create orbital path (circle)
+        # Create orbital path (circle at fixed distance)
         theta = np.linspace(0, 2 * np.pi, 100)
         orbit_x = distance_display * np.cos(theta)
         orbit_y = distance_display * np.sin(theta)
@@ -620,11 +785,18 @@ def main():
                         st.session_state.zoom_level = 'system'
 
                 system_data = get_system_data(sample_idx, system_data_all)
-                viz_result = create_solar_system_view(system_data, st.session_state.zoom_level)
+
+                if system_data and not pd.isna(system_data.get('planet_radius')):
+                    # Generate and display Three.js visualization
+                    html_viz = create_threejs_visualization(system_data, st.session_state.zoom_level)
+                    components.html(html_viz, height=600, scrolling=False)
+
+                    # Also get data for metrics display
+                    viz_result = create_solar_system_view(system_data, st.session_state.zoom_level)
+                else:
+                    viz_result = None
 
                 if viz_result:
-                    # Display the visualization
-                    st.plotly_chart(viz_result['fig'], use_container_width=True)
 
                     # System information
                     st.markdown("### System Information")
