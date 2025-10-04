@@ -1,0 +1,60 @@
+{
+  "metrics": {
+    "train": {
+      "accuracy": 0.9232148192411115,
+      "precision": 0.9125553914327917,
+      "recall": 0.9340792258844874,
+      "f1": 0.9231918708906156,
+      "roc_auc": 0.977777542675712
+    },
+    "validation": {
+      "accuracy": 0.8234064785788924,
+      "precision": 0.8153526970954357,
+      "recall": 0.8308668076109936,
+      "f1": 0.8230366492146597,
+      "roc_auc": 0.9118471860639841
+    },
+    "test": {
+      "accuracy": 0.8431782540512285,
+      "precision": 0.8441835645677694,
+      "recall": 0.837037037037037,
+      "f1": 0.8405951115834219,
+      "roc_auc": 0.9272814727360182
+    }
+  },
+  "feature_count": 9,
+  "feature_names": [
+    "koi_steff",
+    "koi_slogg",
+    "koi_srad",
+    "koi_kepmag",
+    "koi_period",
+    "koi_depth",
+    "koi_duration",
+    "koi_impact",
+    "koi_model_snr"
+  ],
+  "model_params": {
+    "boosting_type": "gbdt",
+    "class_weight": null,
+    "colsample_bytree": 0.8,
+    "importance_type": "split",
+    "learning_rate": 0.05,
+    "max_depth": 7,
+    "min_child_samples": 20,
+    "min_child_weight": 0.001,
+    "min_split_gain": 0.0,
+    "n_estimators": 200,
+    "n_jobs": null,
+    "num_leaves": 31,
+    "objective": null,
+    "random_state": 42,
+    "reg_alpha": 0.0,
+    "reg_lambda": 0.0,
+    "subsample": 0.8,
+    "subsample_for_bin": 200000,
+    "subsample_freq": 0,
+    "verbose": -1
+  },
+  "trained_date": "2025-10-04 12:06:08"
+}
