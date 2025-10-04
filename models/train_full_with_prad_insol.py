@@ -48,18 +48,19 @@ def split_data(X, y, test_size=0.2, val_size=0.1, random_state=42):
     return X_train, X_val, X_test, y_train, y_val, y_test
 
 def train_model(X_train, y_train, X_val, y_val):
-    """Train LightGBM model with optimized regularization"""
+    """Train LightGBM model with OPTIMIZED settings (aggressive regularization)"""
     print("\nTraining LightGBM model (58 features with koi_prad & koi_insol)...")
-    print("  Configuration:")
-    print("    - n_estimators: 1000")
+    print("  Configuration: OPTIMIZED SETTINGS (AGGRESSIVE REGULARIZATION)")
+    print("    - n_estimators: 1000 (with early stopping)")
     print("    - learning_rate: 0.02")
     print("    - max_depth: 6")
     print("    - num_leaves: 31")
     print("    - min_child_samples: 50")
     print("    - subsample: 0.6")
     print("    - colsample_bytree: 0.6")
-    print("    - reg_alpha: 2.0 (L1)")
-    print("    - reg_lambda: 2.0 (L2)")
+    print("    - reg_alpha: 2.0 (strong L1)")
+    print("    - reg_lambda: 2.0 (strong L2)")
+    print("    - min_split_gain: 0.2")
     print("    - Early stopping: 100 rounds")
 
     model = LGBMClassifier(
@@ -73,6 +74,9 @@ def train_model(X_train, y_train, X_val, y_val):
         reg_alpha=2.0,
         reg_lambda=2.0,
         min_split_gain=0.2,
+        min_child_weight=0.05,
+        path_smooth=1.0,
+        max_bin=200,
         random_state=42,
         verbose=-1
     )
@@ -181,9 +185,9 @@ def main():
     print(f"  ROC-AUC:   {test_metrics['roc_auc']:.1%}")
     print(f"  Train/Test Gap: {train_test_gap:.1%}")
 
-    print(f"\nComparison:")
-    print(f"  Previous (52 features):        86.9% accuracy, 94.5% ROC-AUC, 7.3% gap")
-    print(f"  New (58 features + prad/insol): {test_metrics['accuracy']:.1%} accuracy, {test_metrics['roc_auc']:.1%} ROC-AUC, {train_test_gap:.1%} gap")
+    print(f"\nComparison (with optimized settings):")
+    print(f"  Optimized 52 features:         86.9% accuracy, 94.5% ROC-AUC, 7.3% gap")
+    print(f"  Optimized 58 features + prad/insol: {test_metrics['accuracy']:.1%} accuracy, {test_metrics['roc_auc']:.1%} ROC-AUC, {train_test_gap:.1%} gap")
 
     improvement = (test_metrics['accuracy'] - 0.869) * 100
     print(f"\n  Improvement: {improvement:+.1f}% accuracy")
