@@ -232,11 +232,6 @@ def main():
 
     # Sidebar
     with st.sidebar:
-        st.image("https://www.nasa.gov/wp-content/uploads/2023/03/nasa-logo-web-rgb.png", width=200)
-        st.markdown("## NASA Space Apps Challenge 2025")
-        st.markdown("**Challenge:** A World Away: Hunting for Exoplanets with AI")
-        st.markdown("---")
-
         # Model selection
         st.markdown("### Select Model")
         available_models = []
@@ -282,23 +277,20 @@ def main():
     with st.sidebar:
         # Only show sample selection if in Sample Explorer tab and data is available
         if X_data is not None and y_data is not None:
-            st.markdown("---")
             st.markdown("### 🔍 Sample Selection")
 
             # Filter options
             filter_option = st.radio(
                 "Filter by type:",
-                ["All KOIs", "Planets Only", "False Positives Only"],
+                ["Planets", "False Positives"],
                 key="tab1_filter"
             )
 
             # Filter indices based on selection
-            if filter_option == "Planets Only":
+            if filter_option == "Planets":
                 available_indices = [i for i, label in enumerate(y_data) if label == 1]
-            elif filter_option == "False Positives Only":
+            else:  # False Positives
                 available_indices = [i for i, label in enumerate(y_data) if label == 0]
-            else:
-                available_indices = list(range(len(X_data)))
 
             st.metric("Available Samples", len(available_indices))
 
@@ -320,7 +312,6 @@ def main():
                     st.info(f"**Sample Index:** {sample_idx}")
 
                 # Navigation section
-                st.markdown("---")
                 st.markdown("### 📑 View Section")
                 view_section = st.radio(
                     "Jump to:",
@@ -336,7 +327,6 @@ def main():
             view_section = "Prediction"
 
         # Model performance and about section
-        st.markdown("---")
         st.markdown("### Model Performance")
 
         # Display test metrics
@@ -352,7 +342,6 @@ def main():
 
         st.metric("ROC-AUC", f"{test_metrics['roc_auc']:.1%}")
 
-        st.markdown("---")
         st.markdown("### About")
         st.markdown(f"""
         This application uses **LightGBM** to classify
@@ -749,6 +738,16 @@ def main():
         DOI: http://doi.org/10.17616/R3X31K
         ```
         """)
+
+    # Footer
+    st.markdown("---")
+    st.markdown("""
+    <div style='text-align: center; color: #9CA3AF; padding: 20px;'>
+        <p><strong>NASA Space Apps Challenge 2025</strong></p>
+        <p>Challenge: A World Away - Hunting for Exoplanets with AI</p>
+        <p style='font-size: 0.9em;'>Data from NASA Exoplanet Archive | Powered by LightGBM & Streamlit</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
