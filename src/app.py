@@ -269,6 +269,73 @@ def main():
 
         feature_names = preprocessor['feature_columns']
 
+    # Load sample data for selected model
+    X_data, y_data = load_sample_data(model_type)
+
+    # Load planet radius data from raw dataset
+    radius_data = load_raw_planet_data()
+
+    # Load KOI names if available
+    koi_names = load_koi_names()
+
+    # Continue sidebar with Sample Explorer controls
+    with st.sidebar:
+        # Only show sample selection if in Sample Explorer tab and data is available
+        if X_data is not None and y_data is not None:
+            st.markdown("---")
+            st.markdown("### 🔍 Sample Selection")
+
+            # Filter options
+            filter_option = st.radio(
+                "Filter by type:",
+                ["All KOIs", "Planets Only", "False Positives Only"],
+                key="tab1_filter"
+            )
+
+            # Filter indices based on selection
+            if filter_option == "Planets Only":
+                available_indices = [i for i, label in enumerate(y_data) if label == 1]
+            elif filter_option == "False Positives Only":
+                available_indices = [i for i, label in enumerate(y_data) if label == 0]
+            else:
+                available_indices = list(range(len(X_data)))
+
+            st.metric("Available Samples", len(available_indices))
+
+            # Slider for selection
+            if len(available_indices) > 0:
+                slider_idx = st.slider(
+                    "Select sample:",
+                    0,
+                    len(available_indices) - 1,
+                    0,
+                    key="tab1_slider"
+                )
+                sample_idx = available_indices[slider_idx]
+
+                # Display KOI name if available
+                if koi_names is not None and len(koi_names) == len(X_data):
+                    st.info(f"**KOI:** {koi_names[sample_idx]}")
+                else:
+                    st.info(f"**Sample Index:** {sample_idx}")
+
+                # Navigation section
+                st.markdown("---")
+                st.markdown("### 📑 View Section")
+                view_section = st.radio(
+                    "Jump to:",
+                    ["Prediction", "3D Visualization", "Feature Explanation"],
+                    key="tab1_section"
+                )
+            else:
+                st.warning("No samples available for this filter.")
+                sample_idx = 0
+                view_section = "Prediction"
+        else:
+            sample_idx = 0
+            view_section = "Prediction"
+
+        # Model performance and about section
         st.markdown("---")
         st.markdown("### Model Performance")
 
@@ -299,12 +366,6 @@ def main():
         the model learns from genuine transit signals only.
         """)
 
-    # Load sample data for selected model
-    X_data, y_data = load_sample_data(model_type)
-
-    # Load planet radius data from raw dataset
-    radius_data = load_raw_planet_data()
-
     # Main content tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔍 Sample Explorer", "📂 Import & Predict", "📊 Data Explorer", "📈 Model Performance", "📚 Documentation"])
 
@@ -312,60 +373,6 @@ def main():
         st.header("🔍 Sample Explorer & Analysis")
 
         if X_data is not None and y_data is not None:
-            # Load KOI names if available
-            koi_names = load_koi_names()
-
-            # Sidebar for sample selection
-            with st.sidebar:
-                st.markdown("---")
-                st.markdown("### 🔍 Sample Selection")
-
-                # Filter options
-                filter_option = st.radio(
-                    "Filter by type:",
-                    ["All KOIs", "Planets Only", "False Positives Only"],
-                    key="tab1_filter"
-                )
-
-                # Filter indices based on selection
-                if filter_option == "Planets Only":
-                    available_indices = [i for i, label in enumerate(y_data) if label == 1]
-                elif filter_option == "False Positives Only":
-                    available_indices = [i for i, label in enumerate(y_data) if label == 0]
-                else:
-                    available_indices = list(range(len(X_data)))
-
-                st.metric("Available Samples", len(available_indices))
-
-                # Slider for selection
-                if len(available_indices) > 0:
-                    slider_idx = st.slider(
-                        "Select sample:",
-                        0,
-                        len(available_indices) - 1,
-                        0,
-                        key="tab1_slider"
-                    )
-                    sample_idx = available_indices[slider_idx]
-
-                    # Display KOI name if available
-                    if koi_names is not None and len(koi_names) == len(X_data):
-                        st.info(f"**KOI:** {koi_names[sample_idx]}")
-                    else:
-                        st.info(f"**Sample Index:** {sample_idx}")
-
-                    # Navigation section
-                    st.markdown("---")
-                    st.markdown("### 📑 View Section")
-                    view_section = st.radio(
-                        "Jump to:",
-                        ["Prediction", "3D Visualization", "Feature Explanation"],
-                        key="tab1_section"
-                    )
-                else:
-                    st.warning("No samples available for this filter.")
-                    sample_idx = 0
-                    view_section = "Prediction"
 
             # Make prediction
             sample = X_data.iloc[sample_idx].values.reshape(1, -1)
