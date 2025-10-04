@@ -29,22 +29,33 @@ st.set_page_config(
 st.markdown("""
 <style>
     .main-header {
-        font-size: 3rem;
+        font-size: 2.5rem;
         color: #1E3A8A;
         text-align: center;
-        margin-bottom: 1rem;
+        margin-top: 0rem;
+        margin-bottom: 0.5rem;
+        padding-top: 0rem;
     }
     .sub-header {
         font-size: 1.2rem;
         color: #4B5563;
         text-align: center;
-        margin-bottom: 2rem;
+        margin-bottom: 1rem;
     }
     .metric-card {
         background-color: #F3F4F6;
         padding: 1rem;
         border-radius: 0.5rem;
         margin: 0.5rem 0;
+    }
+    /* Reduce top padding of main content area */
+    .block-container {
+        padding-top: 1rem;
+    }
+    /* Reduce horizontal rule margins */
+    hr {
+        margin-top: 0.5rem;
+        margin-bottom: 1rem;
     }
 </style>
 """, unsafe_allow_html=True)
