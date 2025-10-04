@@ -14,6 +14,8 @@ from plotly.subplots import make_subplots
 import pickle
 import json
 from datetime import datetime
+import shap
+import matplotlib.pyplot as plt
 
 # Page configuration
 st.set_page_config(
@@ -92,6 +94,30 @@ def load_sample_data(model_type):
     except Exception as e:
         st.error(f"Error loading sample data: {str(e)}")
         return None, None
+
+@st.cache_data
+def load_koi_names():
+    """Load original KOI names for sample selection"""
+    try:
+        df = pd.read_csv('../data/raw/kepler_koi.csv', comment='#')
+        # Get KOI names that exist in our preprocessed data
+        df_processed = pd.read_csv('../data/preprocessing/kepler_koi_preprocessed.csv')
+        return df['kepoi_name'].iloc[:len(df_processed)].tolist()
+    except Exception as e:
+        return None
+
+@st.cache_resource
+def get_shap_explainer(_model, background_data):
+    """Create SHAP explainer (cached to avoid recomputation)"""
+    # Use a small background dataset for TreeExplainer
+    return shap.TreeExplainer(_model, background_data)
+
+def create_shap_waterfall_plot(shap_values, feature_names, max_display=10):
+    """Create SHAP waterfall plot using matplotlib and convert to Streamlit"""
+    fig, ax = plt.subplots(figsize=(10, 6))
+    shap.plots.waterfall(shap_values, max_display=max_display, show=False)
+    plt.tight_layout()
+    return fig
 
 def main():
     # Header
@@ -175,7 +201,7 @@ def main():
     X_data, y_data = load_sample_data(model_type)
 
     # Main content tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["🔮 Predictions", "📊 Data Explorer", "📈 Model Performance", "📚 Documentation"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔮 Predictions", "🔍 Feature Explainer", "📊 Data Explorer", "📈 Model Performance", "📚 Documentation"])
 
     with tab1:
         st.header("Exoplanet Prediction Interface")
@@ -190,7 +216,7 @@ def main():
             st.subheader("Test with Sample Data")
 
             if X_data is not None and y_data is not None:
-                sample_idx = st.slider("Select sample index", 0, len(X_data)-1, 0)
+                sample_idx = st.slider("Select sample index", 0, len(X_data)-1, 0, key="prediction_sample_idx")
 
                 col1, col2 = st.columns(2)
 
@@ -294,6 +320,140 @@ def main():
                     st.error(f"Error processing file: {str(e)}")
 
     with tab2:
+        st.header("🔍 Feature Importance Explainer")
+        st.markdown("""
+        This tool uses **SHAP (SHapley Additive exPlanations)** to explain which features
+        contribute most to the model's prediction for a specific KOI. Features in **red**
+        push the prediction towards "Planet", while features in **blue** push it towards "Non-Planet".
+        """)
+
+        if X_data is not None and y_data is not None:
+            # Load KOI names if available
+            koi_names = load_koi_names()
+
+            if koi_names is not None and len(koi_names) == len(X_data):
+                st.subheader("Select a KOI by Name")
+
+                # Create filter options
+                col1, col2 = st.columns([2, 1])
+                with col1:
+                    filter_option = st.selectbox(
+                        "Filter KOIs by type:",
+                        ["All KOIs", "Confirmed Planets", "Candidate Planets", "False Positives"]
+                    )
+
+                # Filter indices based on selection
+                if filter_option == "Confirmed Planets" or filter_option == "Candidate Planets":
+                    available_indices = [i for i, label in enumerate(y_data) if label == 1]
+                elif filter_option == "False Positives":
+                    available_indices = [i for i, label in enumerate(y_data) if label == 0]
+                else:
+                    available_indices = list(range(len(X_data)))
+
+                available_kois = [(koi_names[i], i) for i in available_indices[:100]]  # Limit to first 100
+
+                with col2:
+                    st.metric("Available", len(available_kois))
+
+                selected_koi = st.selectbox(
+                    "Choose KOI:",
+                    available_kois,
+                    format_func=lambda x: x[0]
+                )
+
+                sample_idx = selected_koi[1]
+            else:
+                st.subheader("Select a Sample by Index")
+                sample_idx = st.slider("Select sample index", 0, len(X_data)-1, 0, key="explainer_sample_idx")
+                st.info(f"Sample #{sample_idx}")
+
+            # Display sample information
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**Sample Information:**")
+                if koi_names is not None and len(koi_names) == len(X_data):
+                    st.write(f"**KOI Name:** {koi_names[sample_idx]}")
+                actual = y_data.iloc[sample_idx]
+                st.write(f"**Actual Label:** {'🌍 Planet' if actual == 1 else '❌ Non-Planet'}")
+
+            with col2:
+                # Make prediction
+                sample = X_data.iloc[sample_idx].values.reshape(1, -1)
+                prediction = model.predict(sample)[0]
+                probability = model.predict_proba(sample)[0]
+
+                st.markdown("**Model Prediction:**")
+                if prediction == 1:
+                    st.success(f"🌍 **Planet** (confidence: {probability[1]:.1%})")
+                else:
+                    st.warning(f"❌ **Non-Planet** (confidence: {probability[0]:.1%})")
+
+                if prediction == actual:
+                    st.success("✅ Correct prediction!")
+                else:
+                    st.error("❌ Incorrect prediction")
+
+            # Generate SHAP explanation
+            if st.button("🔍 Explain This Prediction", type="primary"):
+                with st.spinner("Generating SHAP explanation... This may take a moment."):
+                    try:
+                        # Create background data (sample of training data)
+                        background_size = min(100, len(X_data))
+                        background_data = X_data.sample(n=background_size, random_state=42)
+
+                        # Get SHAP explainer
+                        explainer = get_shap_explainer(model, background_data)
+
+                        # Calculate SHAP values for this sample
+                        shap_values = explainer(sample)
+
+                        # Create waterfall plot
+                        st.subheader("Feature Contribution Waterfall Plot")
+                        st.markdown("""
+                        This plot shows how each feature pushes the prediction from the base value (average model output)
+                        to the final prediction. The base value represents what the model would predict on average.
+                        """)
+
+                        fig = create_shap_waterfall_plot(shap_values[0], feature_names, max_display=15)
+                        st.pyplot(fig)
+                        plt.close()
+
+                        # Show top contributing features
+                        st.subheader("Top Contributing Features")
+
+                        # Get feature importance for this prediction
+                        feature_importance = pd.DataFrame({
+                            'Feature': feature_names,
+                            'SHAP Value': shap_values.values[0],
+                            'Feature Value': sample[0]
+                        })
+                        feature_importance['Absolute Impact'] = abs(feature_importance['SHAP Value'])
+                        feature_importance = feature_importance.sort_values('Absolute Impact', ascending=False)
+
+                        # Display top 10 features
+                        st.dataframe(
+                            feature_importance[['Feature', 'Feature Value', 'SHAP Value']].head(10).style.format({
+                                'Feature Value': '{:.4f}',
+                                'SHAP Value': '{:.4f}'
+                            }),
+                            use_container_width=True
+                        )
+
+                        st.markdown("""
+                        **How to interpret:**
+                        - **Positive SHAP values** (push towards Planet): These features increase the likelihood of a planet classification
+                        - **Negative SHAP values** (push towards Non-Planet): These features decrease the likelihood of a planet classification
+                        - **Magnitude**: Larger absolute values indicate stronger influence on the prediction
+                        """)
+
+                    except Exception as e:
+                        st.error(f"Error generating SHAP explanation: {str(e)}")
+                        st.info("SHAP analysis may fail for some models. Try selecting a different sample.")
+        else:
+            st.warning("Sample data not available for feature explanation.")
+
+    with tab3:
         st.header("Data Explorer")
 
         if X_data is not None:
@@ -328,7 +488,7 @@ def main():
             fig.update_layout(height=600, title_text="Feature Distributions")
             st.plotly_chart(fig, use_container_width=True)
 
-    with tab3:
+    with tab4:
         st.header("Model Performance Analysis")
 
         # Metrics comparison across splits
@@ -376,7 +536,7 @@ def main():
             st.subheader("Model Information")
             st.json(metrics['model_params'])
 
-    with tab4:
+    with tab5:
         st.header("Documentation")
 
         model_description = "Baseline (9 features)" if model_type == "baseline" else "Full (52 features, optimized)"
