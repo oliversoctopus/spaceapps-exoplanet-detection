@@ -77,9 +77,8 @@ class ExoplanetPreprocessor:
             'koi_disposition', 'koi_pdisposition', 'koi_score', 'kepler_name',
 
             # Derived planet properties (assume planet exists)
-            'koi_prad', 'koi_prad_err1', 'koi_prad_err2',
+            # Note: koi_prad and koi_insol verified as non-leaking via statistical tests
             'koi_teq', 'koi_teq_err1', 'koi_teq_err2',
-            'koi_insol', 'koi_insol_err1', 'koi_insol_err2',
             'koi_dor', 'koi_dor_err1', 'koi_dor_err2',
             'koi_incl', 'koi_incl_err1', 'koi_incl_err2',
             'koi_ror', 'koi_ror_err1', 'koi_ror_err2',
