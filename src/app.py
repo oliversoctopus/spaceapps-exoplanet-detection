@@ -132,105 +132,268 @@ def create_shap_waterfall_plot(shap_values, feature_names, max_display=10):
 
 @st.cache_data
 def load_raw_planet_data():
-    """Load planet radius data from raw dataset"""
+    """Load complete system data from raw dataset"""
     try:
         df_raw = pd.read_csv('../data/kepler_koi.csv', comment='#')
-        # Create a mapping of indices to planet radius
-        radius_data = {}
+        # Create a mapping of indices to system data
+        system_data = {}
         for idx, row in df_raw.iterrows():
-            if pd.notna(row.get('koi_prad')):
-                radius_data[idx] = float(row['koi_prad'])
-        return radius_data
+            system_data[idx] = {
+                'planet_radius': row.get('koi_prad'),  # Earth radii
+                'star_radius': row.get('koi_srad'),    # Solar radii
+                'orbital_distance': row.get('koi_sma'), # AU
+                'orbital_period': row.get('koi_period'), # days
+                'star_mass': row.get('koi_smass'),      # Solar masses
+                'star_temp': row.get('koi_steff')       # Kelvin
+            }
+        return system_data
     except Exception as e:
         st.warning(f"Could not load raw planet data: {str(e)}")
         return {}
 
-def get_planet_radius(koi_idx, radius_data):
-    """Get planet radius from cached raw data"""
-    return radius_data.get(koi_idx, None)
+def get_system_data(koi_idx, system_data):
+    """Get complete system data for a KOI"""
+    return system_data.get(koi_idx, {})
 
-def create_planet_comparison_3d(planet_radius, planet_type="Exoplanet"):
-    """Create 3D visualization comparing planet size to Earth using Plotly"""
+def classify_star_by_temp(temp_kelvin):
+    """Classify star type by temperature and return color"""
+    if pd.isna(temp_kelvin):
+        return 'G-type', '#FDB813'  # Default to Sun-like
 
-    # Planet colors based on size classification
-    if planet_radius is None:
+    if temp_kelvin >= 30000:
+        return 'O-type', '#9BB0FF'  # Blue
+    elif temp_kelvin >= 10000:
+        return 'B-type', '#AABFFF'  # Blue-white
+    elif temp_kelvin >= 7500:
+        return 'A-type', '#CAD7FF'  # White
+    elif temp_kelvin >= 6000:
+        return 'F-type', '#F8F7FF'  # Yellow-white
+    elif temp_kelvin >= 5200:
+        return 'G-type', '#FDB813'  # Yellow (Sun-like)
+    elif temp_kelvin >= 3700:
+        return 'K-type', '#FF8912'  # Orange
+    else:
+        return 'M-type', '#FF4500'  # Red
+
+def create_solar_system_view(system_data, zoom_level='system'):
+    """Create interactive solar system visualization with star and planet"""
+
+    planet_radius = system_data.get('planet_radius')
+    star_radius = system_data.get('star_radius')
+    orbital_distance = system_data.get('orbital_distance')
+    orbital_period = system_data.get('orbital_period')
+    star_temp = system_data.get('star_temp')
+
+    # Check for required data
+    if pd.isna(planet_radius) or pd.isna(star_radius) or pd.isna(orbital_distance):
         return None
 
+    # Classify planet and star
     if planet_radius < 1.5:
-        planet_color = '#9F2B00'  # Terrestrial (Rust)
-        type_name = "Terrestrial"
+        planet_color = '#9F2B00'
+        planet_type = "Terrestrial"
     elif planet_radius < 4:
-        planet_color = '#AF4425'  # Super Earth (Burnt Sienna)
-        type_name = "Super Earth"
+        planet_color = '#AF4425'
+        planet_type = "Super Earth"
     elif planet_radius < 10:
-        planet_color = '#5B92E5'  # Neptune-like (Cornflower Blue)
-        type_name = "Neptune-like"
+        planet_color = '#5B92E5'
+        planet_type = "Neptune-like"
     else:
-        planet_color = '#D2B48C'  # Gas Giant (Tan)
-        type_name = "Gas Giant"
+        planet_color = '#D2B48C'
+        planet_type = "Gas Giant"
 
-    earth_color = '#4F7CAC'  # Earth (Steel Blue)
-
-    # Create spheres with appropriate scaling
-    max_display_radius = 3
-    earth_display_radius = 0.5
-    planet_display_radius = min(max_display_radius, earth_display_radius * planet_radius)
+    star_type, star_color = classify_star_by_temp(star_temp)
 
     # Create mesh grids for spheres
     u = np.linspace(0, 2 * np.pi, 50)
-    v = np.linspace(0, np.pi, 50)
+    v = np.linspace(0, 2 * np.pi, 50)
 
-    # Planet sphere
-    x_planet = planet_display_radius * np.outer(np.cos(u), np.sin(v)) - (planet_display_radius + 0.5)
-    y_planet = planet_display_radius * np.outer(np.sin(u), np.sin(v))
-    z_planet = planet_display_radius * np.outer(np.ones(np.size(u)), np.cos(v))
-
-    # Earth sphere
-    x_earth = earth_display_radius * np.outer(np.cos(u), np.sin(v)) + (earth_display_radius + 0.5)
-    y_earth = earth_display_radius * np.outer(np.sin(u), np.sin(v))
-    z_earth = earth_display_radius * np.outer(np.ones(np.size(u)), np.cos(v))
-
-    # Create 3D plot
+    # Create figure
     fig = go.Figure()
 
-    # Add planet
-    fig.add_trace(go.Surface(
-        x=x_planet, y=y_planet, z=z_planet,
-        colorscale=[[0, planet_color], [1, planet_color]],
-        showscale=False,
-        name=f'{type_name} Planet',
-        hovertemplate=f'<b>{type_name}</b><br>Radius: {planet_radius:.2f}x Earth<extra></extra>'
-    ))
+    if zoom_level == 'star':
+        # Star comparison view: Show host star vs Sun
+        star_display_radius = star_radius
+        sun_display_radius = 1.0
 
-    # Add Earth
-    fig.add_trace(go.Surface(
-        x=x_earth, y=y_earth, z=z_earth,
-        colorscale=[[0, earth_color], [1, earth_color]],
-        showscale=False,
-        name='Earth',
-        hovertemplate='<b>Earth</b><br>Radius: 1.00x Earth<extra></extra>'
-    ))
+        # Position: star on left, sun on right
+        spacing = max(star_display_radius, sun_display_radius) * 2.5
 
-    # Update layout
+        # Host star sphere (left)
+        x_star = star_display_radius * np.outer(np.cos(u), np.sin(v)) - spacing/2
+        y_star = star_display_radius * np.outer(np.sin(u), np.sin(v))
+        z_star = star_display_radius * np.outer(np.ones(np.size(u)), np.cos(v))
+
+        # Sun sphere (right)
+        x_sun = sun_display_radius * np.outer(np.cos(u), np.sin(v)) + spacing/2
+        y_sun = sun_display_radius * np.outer(np.sin(u), np.sin(v))
+        z_sun = sun_display_radius * np.outer(np.ones(np.size(u)), np.cos(v))
+
+        fig.add_trace(go.Surface(
+            x=x_star, y=y_star, z=z_star,
+            colorscale=[[0, star_color], [1, star_color]],
+            showscale=False,
+            name=f'{star_type} Star',
+            hovertemplate=f'<b>{star_type} Host Star</b><br>Radius: {star_radius:.2f}x Sun<br>Temp: {star_temp:.0f} K<extra></extra>',
+            lighting=dict(ambient=0.9, diffuse=0.9, fresnel=0.1)
+        ))
+
+        fig.add_trace(go.Surface(
+            x=x_sun, y=y_sun, z=z_sun,
+            colorscale=[[0, '#FDB813'], [1, '#FDB813']],
+            showscale=False,
+            name='Sun',
+            hovertemplate='<b>Sun (for comparison)</b><br>Radius: 1.0x Sun<br>Temp: 5778 K<extra></extra>',
+            lighting=dict(ambient=0.9, diffuse=0.9, fresnel=0.1)
+        ))
+
+        camera_distance = spacing * 1.2
+        title = f'{star_type} Host Star vs Sun'
+
+    elif zoom_level == 'planet':
+        # Planet comparison view: Show exoplanet vs Earth
+        planet_display_radius = planet_radius
+        earth_display_radius = 1.0
+
+        # Position: planet on left, Earth on right
+        spacing = max(planet_display_radius, earth_display_radius) * 2.5
+
+        # Exoplanet sphere (left)
+        x_planet = planet_display_radius * np.outer(np.cos(u), np.sin(v)) - spacing/2
+        y_planet = planet_display_radius * np.outer(np.sin(u), np.sin(v))
+        z_planet = planet_display_radius * np.outer(np.ones(np.size(u)), np.cos(v))
+
+        # Earth sphere (right)
+        x_earth = earth_display_radius * np.outer(np.cos(u), np.sin(v)) + spacing/2
+        y_earth = earth_display_radius * np.outer(np.sin(u), np.sin(v))
+        z_earth = earth_display_radius * np.outer(np.ones(np.size(u)), np.cos(v))
+
+        fig.add_trace(go.Surface(
+            x=x_planet, y=y_planet, z=z_planet,
+            colorscale=[[0, planet_color], [1, planet_color]],
+            showscale=False,
+            name=f'{planet_type} Planet',
+            hovertemplate=f'<b>{planet_type} Exoplanet</b><br>Radius: {planet_radius:.2f}x Earth<br>Period: {orbital_period:.1f} days<extra></extra>'
+        ))
+
+        fig.add_trace(go.Surface(
+            x=x_earth, y=y_earth, z=z_earth,
+            colorscale=[[0, '#4F7CAC'], [1, '#4F7CAC']],
+            showscale=False,
+            name='Earth',
+            hovertemplate='<b>Earth (for comparison)</b><br>Radius: 1.0x Earth<extra></extra>'
+        ))
+
+        camera_distance = spacing * 1.2
+        title = f'{planet_type} Exoplanet vs Earth'
+
+    else:  # system view
+        # Full solar system view
+        # Scale everything up by 10x to make it easier to see
+        scale_factor = 10.0
+
+        star_display_radius = 1.0 * scale_factor
+        planet_display_radius = (planet_radius * 0.00917) / star_radius
+
+        # Convert AU to solar radii for proper scaling (1 AU = 215 solar radii)
+        distance_in_solar_radii = orbital_distance * 215.0
+        distance_display = (distance_in_solar_radii / star_radius) * scale_factor
+
+        # Ensure planet is outside the star
+        min_distance = star_display_radius + 0.5 * scale_factor
+        distance_display = max(distance_display, min_distance)
+
+        # Make planet visible - increase size by 10x from previous (0.05 -> 0.5)
+        # Ensure it's always smaller than star
+        planet_display_radius = min(planet_display_radius * 0.5, star_display_radius * 0.3) * scale_factor
+        planet_display_radius = max(planet_display_radius, 0.2 * scale_factor)  # Minimum for visibility
+
+        # Star sphere (at origin)
+        x_star = star_display_radius * np.outer(np.cos(u), np.sin(v))
+        y_star = star_display_radius * np.outer(np.sin(u), np.sin(v))
+        z_star = star_display_radius * np.outer(np.ones(np.size(u)), np.cos(v))
+
+        # Planet sphere (at orbital distance)
+        x_planet = planet_display_radius * np.outer(np.cos(u), np.sin(v)) + distance_display
+        y_planet = planet_display_radius * np.outer(np.sin(u), np.sin(v))
+        z_planet = planet_display_radius * np.outer(np.ones(np.size(u)), np.cos(v))
+
+        # Create orbital path (circle)
+        theta = np.linspace(0, 2 * np.pi, 100)
+        orbit_x = distance_display * np.cos(theta)
+        orbit_y = distance_display * np.sin(theta)
+        orbit_z = np.zeros_like(theta)
+
+        fig.add_trace(go.Surface(
+            x=x_star, y=y_star, z=z_star,
+            colorscale=[[0, star_color], [1, star_color]],
+            showscale=False,
+            name=f'{star_type} Star',
+            hovertemplate=f'<b>{star_type} Star</b><br>Radius: {star_radius:.2f}x Sun<br>Temp: {star_temp:.0f} K<extra></extra>',
+            lighting=dict(ambient=0.9, diffuse=0.9, fresnel=0.1)
+        ))
+
+        fig.add_trace(go.Surface(
+            x=x_planet, y=y_planet, z=z_planet,
+            colorscale=[[0, planet_color], [1, planet_color]],
+            showscale=False,
+            name=f'{planet_type} Planet',
+            hovertemplate=f'<b>{planet_type}</b><br>Radius: {planet_radius:.2f}x Earth<br>Period: {orbital_period:.1f} days<extra></extra>'
+        ))
+
+        fig.add_trace(go.Scatter3d(
+            x=orbit_x, y=orbit_y, z=orbit_z,
+            mode='lines',
+            line=dict(color='rgba(255,255,255,0.3)', width=2, dash='dash'),
+            showlegend=False,
+            hoverinfo='skip'
+        ))
+
+        # Add text label pointing to planet location
+        fig.add_trace(go.Scatter3d(
+            x=[distance_display],
+            y=[0],
+            z=[planet_display_radius + 0.5],
+            mode='text',
+            text=[f'{planet_type} Planet'],
+            textposition='top center',
+            textfont=dict(size=14, color='#60A5FA'),
+            showlegend=False,
+            hoverinfo='skip'
+        ))
+
+        camera_distance = max(distance_display * 1.5, star_display_radius * 3)
+        title = f'{star_type} Star with {planet_type} Planet'
+
+    # Common layout settings
     fig.update_layout(
-        title=f'Size Comparison: {type_name} ({planet_radius:.2f}x Earth) vs Earth',
+        title=title,
         scene=dict(
-            xaxis=dict(visible=False),
-            yaxis=dict(visible=False),
-            zaxis=dict(visible=False),
-            bgcolor='#111827',
-            camera=dict(
-                eye=dict(x=1.5, y=1.5, z=1.2)
-            )
+            xaxis=dict(visible=False, range=[-camera_distance, camera_distance]),
+            yaxis=dict(visible=False, range=[-camera_distance, camera_distance]),
+            zaxis=dict(visible=False, range=[-camera_distance, camera_distance]),
+            bgcolor='#000000',
+            aspectmode='cube',
+            camera=dict(eye=dict(x=1.5, y=1.5, z=1.0))
         ),
         paper_bgcolor='#1F2937',
-        plot_bgcolor='#1F2937',
+        plot_bgcolor='#000000',
         font=dict(color='#F3F4F6'),
         height=500,
-        margin=dict(l=0, r=0, t=40, b=0)
+        margin=dict(l=0, r=0, t=40, b=0),
+        showlegend=False
     )
 
-    return fig, type_name
+    return {
+        'fig': fig,
+        'planet_type': planet_type,
+        'star_type': star_type,
+        'planet_radius': planet_radius,
+        'star_radius': star_radius,
+        'orbital_distance': orbital_distance,
+        'orbital_period': orbital_period,
+        'star_temp': star_temp
+    }
 
 def main():
     # Header
@@ -278,8 +441,8 @@ def main():
     # Load sample data for selected model
     X_data, y_data = load_sample_data(model_type)
 
-    # Load planet radius data from raw dataset
-    radius_data = load_raw_planet_data()
+    # Load system data from raw dataset
+    system_data_all = load_raw_planet_data()
 
     # Load KOI names if available
     koi_names = load_koi_names()
@@ -436,38 +599,61 @@ def main():
                 )
                 st.plotly_chart(fig_gauge, use_container_width=True)
 
-            # Section 2: 3D Visualization
+            # Section 2: 3D Solar System Visualization
             elif view_section == "3D Visualization":
-                st.subheader("🪐 Planet Size Comparison")
+                st.subheader("🌌 Solar System Visualization")
 
-                planet_radius = get_planet_radius(sample_idx, radius_data)
-                if planet_radius is not None and planet_radius > 0:
-                    viz_result = create_planet_comparison_3d(planet_radius)
-                    if viz_result:
-                        fig_3d, planet_type = viz_result
-                        st.plotly_chart(fig_3d, use_container_width=True)
+                # Initialize zoom level in session state
+                if 'zoom_level' not in st.session_state:
+                    st.session_state.zoom_level = 'system'
 
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.metric("Planet Type", planet_type)
-                        with col2:
-                            st.metric("Radius", f"{planet_radius:.2f}× Earth")
-                        with col3:
-                            if planet_radius < 1.5:
-                                st.info("Similar to Earth/Mars")
-                            elif planet_radius < 4:
-                                st.info("Larger than Earth")
-                            elif planet_radius < 10:
-                                st.info("Similar to Neptune")
-                            else:
-                                st.info("Similar to Jupiter")
-                    else:
-                        st.warning("Unable to create 3D visualization for this planet.")
+                # Zoom controls (before visualization so they can update state)
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    if st.button("🌟 Zoom to Star", key="zoom_star"):
+                        st.session_state.zoom_level = 'star'
+                with col2:
+                    if st.button("🌍 Zoom to Planet", key="zoom_planet"):
+                        st.session_state.zoom_level = 'planet'
+                with col3:
+                    if st.button("🔭 Full System View", key="zoom_system"):
+                        st.session_state.zoom_level = 'system'
+
+                system_data = get_system_data(sample_idx, system_data_all)
+                viz_result = create_solar_system_view(system_data, st.session_state.zoom_level)
+
+                if viz_result:
+                    # Display the visualization
+                    st.plotly_chart(viz_result['fig'], use_container_width=True)
+
+                    # System information
+                    st.markdown("### System Information")
+                    col1, col2, col3, col4 = st.columns(4)
+
+                    with col1:
+                        st.metric("Star Type", viz_result['star_type'])
+                        st.caption(f"Temp: {viz_result['star_temp']:.0f} K" if not pd.isna(viz_result['star_temp']) else "Temp: N/A")
+
+                    with col2:
+                        st.metric("Star Radius", f"{viz_result['star_radius']:.2f}x Sun")
+                        st.caption("Compared to our Sun")
+
+                    with col3:
+                        st.metric("Planet Type", viz_result['planet_type'])
+                        st.metric("Planet Radius", f"{viz_result['planet_radius']:.2f}x Earth")
+
+                    with col4:
+                        st.metric("Orbital Distance", f"{viz_result['orbital_distance']:.3f} AU")
+                        st.metric("Orbital Period", f"{viz_result['orbital_period']:.1f} days")
+
+                    st.caption("**AU** = Astronomical Unit (Earth-Sun distance, ~93 million miles)")
+
                 else:
-                    st.info("Planet radius data not available for this KOI.")
+                    st.info("System data not available for this KOI.")
                     st.markdown("""
-                    **Note:** Radius data is only available for confirmed planets and candidates.
-                    False positives typically don't have reliable radius measurements.
+                    **Note:** Complete system data (star radius, planet radius, orbital distance) is only
+                    available for confirmed planets and candidates. False positives typically don't have
+                    reliable orbital parameters.
                     """)
 
             # Section 3: Feature Explanation

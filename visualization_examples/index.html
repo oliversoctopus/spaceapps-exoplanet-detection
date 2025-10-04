@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Exoplanet AI Explorer with XAI</title>
+    <style>
+        body { font-family: sans-serif; max-width: 900px; margin: auto; padding: 20px; }
+        #results { margin-top: 20px; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        #plot { max-width: 100%; height: auto; margin-top: 15px; border: 1px solid #eee;}
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, .1); border-left-color: #7983ff;
+            border-radius: 50%; width: 30px; height: 30px;
+            animation: spin 1s linear infinite; display: inline-block; vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <h1>Exoplanet AI Explorer 🔭</h1>
+    <p>Select a Kepler Object of Interest (KOI) to have the AI model analyze it and explain its reasoning.</p>
+
+    <select id="candidate-selector">
+        <option value="">-- Select a Candidate --</option>
+        {% for candidate in candidates %}
+            <option value="{{ candidate }}">{{ candidate }}</option>
+        {% endfor %}
+    </select>
+    <button id="analyze-btn">Analyze</button>
+
+    <div id="results" style="display:none;">
+        <h2 id="prediction-text"></h2>
+        <p><strong>Model Confidence:</strong> <span id="confidence"></span></p>
+        <p><strong>Explanation:</strong> <span id="explanation"></span></p>
+        <div id="plot-container">
+            <img id="plot" alt="SHAP explanation plot">
+        </div>
+    </div>
+    <script src="/static/script.js"></script>
+</body>
+</html>

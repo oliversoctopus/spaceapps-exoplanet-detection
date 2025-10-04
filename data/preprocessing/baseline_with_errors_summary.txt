@@ -1,0 +1,35 @@
+BASELINE + ERRORS PREPROCESSING SUMMARY
+========================================
+
+Number of samples: 9564
+Number of features: 23 (9 baseline + 14 errors)
+Planet percentage: 49.40%
+
+Baseline Features (9):
+  1. koi_steff
+  2. koi_slogg
+  3. koi_srad
+  4. koi_kepmag
+  5. koi_period
+  6. koi_depth
+  7. koi_duration
+  8. koi_impact
+  9. koi_model_snr
+
+Error Features (14):
+  1. koi_steff_err1
+  2. koi_steff_err2
+  3. koi_slogg_err1
+  4. koi_slogg_err2
+  5. koi_srad_err1
+  6. koi_srad_err2
+  7. koi_period_err1
+  8. koi_period_err2
+  9. koi_depth_err1
+  10. koi_depth_err2
+  11. koi_duration_err1
+  12. koi_duration_err2
+  13. koi_impact_err1
+  14. koi_impact_err2
+
+Note: Data splitting (train/val/test) is handled during model training.
