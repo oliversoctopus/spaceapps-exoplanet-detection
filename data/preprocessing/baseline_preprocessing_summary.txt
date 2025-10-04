@@ -1,0 +1,19 @@
+BASELINE PREPROCESSING SUMMARY
+========================================
+
+Number of samples: 9564
+Number of features: 9
+Planet percentage: 49.40%
+
+Baseline Features (9):
+  1. koi_steff
+  2. koi_slogg
+  3. koi_srad
+  4. koi_kepmag
+  5. koi_period
+  6. koi_depth
+  7. koi_duration
+  8. koi_impact
+  9. koi_model_snr
+
+Note: Data splitting (train/val/test) is handled during model training.
