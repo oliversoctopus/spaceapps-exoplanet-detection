@@ -340,7 +340,7 @@ def main():
                 else:
                     available_indices = list(range(len(X_data)))
 
-                available_kois = [(koi_names[i], i) for i in available_indices[:100]]  # Limit to first 100
+                available_kois = [(koi_names[i], i) for i in available_indices]
 
                 with col2:
                     st.metric("Available", len(available_kois))
