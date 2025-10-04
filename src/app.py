@@ -48,32 +48,44 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 @st.cache_resource
-def load_model():
-    """Load trained LightGBM model and preprocessor"""
+def load_models():
+    """Load both baseline and full LightGBM models"""
+    models = {}
+
+    # Load baseline model
     try:
-        # Load LightGBM model from models directory
-        with open('../models/lightgbm_model.pkl', 'rb') as f:
-            model = pickle.load(f)
-
-        # Load metrics
-        with open('../models/model_metrics.json', 'r') as f:
-            metrics = json.load(f)
-
-        # Load preprocessor
-        with open('../data/preprocessing/preprocessor.pkl', 'rb') as f:
-            preprocessor = pickle.load(f)
-
-        return model, metrics, preprocessor
-
+        with open('../models/baseline_lightgbm_model.pkl', 'rb') as f:
+            models['baseline_model'] = pickle.load(f)
+        with open('../models/baseline_model_metrics.json', 'r') as f:
+            models['baseline_metrics'] = json.load(f)
+        with open('../data/preprocessing/baseline_preprocessor.pkl', 'rb') as f:
+            models['baseline_preprocessor'] = pickle.load(f)
     except Exception as e:
-        st.error(f"Error loading model: {str(e)}")
-        return None, None, None
+        st.warning(f"Baseline model not available: {str(e)}")
+        models['baseline_model'] = None
+
+    # Load full model
+    try:
+        with open('../models/lightgbm_model.pkl', 'rb') as f:
+            models['full_model'] = pickle.load(f)
+        with open('../models/model_metrics.json', 'r') as f:
+            models['full_metrics'] = json.load(f)
+        with open('../data/preprocessing/preprocessor.pkl', 'rb') as f:
+            models['full_preprocessor'] = pickle.load(f)
+    except Exception as e:
+        st.warning(f"Full model not available: {str(e)}")
+        models['full_model'] = None
+
+    return models
 
 @st.cache_data
-def load_sample_data():
+def load_sample_data(model_type):
     """Load preprocessed data for demonstration"""
     try:
-        df = pd.read_csv('../data/preprocessing/kepler_koi_preprocessed.csv')
+        if model_type == "baseline":
+            df = pd.read_csv('../data/preprocessing/kepler_koi_baseline.csv')
+        else:
+            df = pd.read_csv('../data/preprocessing/kepler_koi_preprocessed.csv')
         X = df.drop('label', axis=1)
         y = df['label']
         return X, y
@@ -87,19 +99,8 @@ def main():
     st.markdown('<p class="sub-header">AI-Powered Detection of Exoplanets from Kepler Transit Data</p>', unsafe_allow_html=True)
     st.markdown("---")
 
-    # Load model and data
-    model, metrics, preprocessor = load_model()
-    X_data, y_data = load_sample_data()
-
-    if model is None:
-        st.error("Failed to load model. Please ensure model files are in the correct location.")
-        return
-
-    if preprocessor is None:
-        st.error("Failed to load preprocessor.")
-        return
-
-    feature_names = preprocessor['feature_columns']
+    # Load models
+    models = load_models()
 
     # Sidebar
     with st.sidebar:
@@ -108,7 +109,40 @@ def main():
         st.markdown("**Challenge:** A World Away: Hunting for Exoplanets with AI")
         st.markdown("---")
 
-        st.markdown("### LightGBM Model Performance")
+        # Model selection
+        st.markdown("### Select Model")
+        available_models = []
+        if models.get('baseline_model') is not None:
+            available_models.append("Baseline (9 features)")
+        if models.get('full_model') is not None:
+            available_models.append("Full (77 features)")
+
+        if not available_models:
+            st.error("No models available!")
+            return
+
+        selected_model = st.radio(
+            "Choose model:",
+            available_models,
+            help="Baseline model uses 9 core features, Full model uses 77 features"
+        )
+
+        # Set active model based on selection
+        if "Baseline" in selected_model:
+            model = models['baseline_model']
+            metrics = models['baseline_metrics']
+            preprocessor = models['baseline_preprocessor']
+            model_type = "baseline"
+        else:
+            model = models['full_model']
+            metrics = models['full_metrics']
+            preprocessor = models['full_preprocessor']
+            model_type = "full"
+
+        feature_names = preprocessor['feature_columns']
+
+        st.markdown("---")
+        st.markdown("### Model Performance")
 
         # Display test metrics
         test_metrics = metrics['metrics']['test']
@@ -129,13 +163,16 @@ def main():
         This application uses **LightGBM** to classify
         potential exoplanets from Kepler Space Telescope data.
 
-        **Model:** Gradient Boosting Classifier
+        **Model:** {selected_model}
         **Features:** {len(feature_names)} observational features
         **Accuracy:** {test_metrics['accuracy']:.1%}
 
         Data leakage has been carefully removed to ensure
         the model learns from genuine transit signals only.
         """)
+
+    # Load sample data for selected model
+    X_data, y_data = load_sample_data(model_type)
 
     # Main content tabs
     tab1, tab2, tab3, tab4 = st.tabs(["🔮 Predictions", "📊 Data Explorer", "📈 Model Performance", "📚 Documentation"])
@@ -146,7 +183,7 @@ def main():
         prediction_method = st.radio(
             "Choose prediction method:",
             ["Sample Data", "Upload CSV"],
-            help="Manual input not available - model uses 77 specialized features"
+            help=f"Manual input not available - model uses {len(feature_names)} specialized features"
         )
 
         if prediction_method == "Sample Data":
@@ -342,6 +379,8 @@ def main():
     with tab4:
         st.header("Documentation")
 
+        model_description = "Baseline (9 features)" if model_type == "baseline" else "Full (77 features)"
+
         st.markdown(f"""
         ## About This Project
 
@@ -352,17 +391,27 @@ def main():
         - **Source**: NASA Exoplanet Archive - Kepler Objects of Interest (KOI)
         - **Size**: 9,564 transit signals
         - **Classes**: Planets (CONFIRMED + CANDIDATE) vs Non-Planets (FALSE POSITIVE)
-        - **Features**: {len(feature_names)} observational features after data leakage removal
+        - **Current Model**: {model_description}
 
         ### Model Architecture
         - **Algorithm**: LightGBM (Light Gradient Boosting Machine)
         - **Type**: Binary classification (Planet vs Non-Planet)
         - **Data Split**: 70% train, 10% validation, 20% test
-        - **Features**: {len(feature_names)} features including:
-          - Transit signals (period, depth, duration, impact)
-          - Stellar properties (temperature, radius, mass, surface gravity)
-          - Photometry (magnitudes in various bands)
-          - Signal statistics and centroid offsets
+        - **Features**: {len(feature_names)} features
+
+        ### Available Models
+
+        **Baseline Model (9 features):**
+        - Core stellar properties: koi_steff, koi_slogg, koi_srad, koi_kepmag
+        - Core transit signals: koi_period, koi_depth, koi_duration, koi_impact, koi_model_snr
+        - Test Accuracy: ~84%
+
+        **Full Model (77 features):**
+        - Comprehensive stellar properties (temperature, radius, mass, gravity, metallicity)
+        - Transit signals (period, depth, duration, impact)
+        - Photometry (magnitudes in multiple bands)
+        - Signal statistics and centroid offsets
+        - Test Accuracy: ~90%
 
         ### Data Leakage Prevention
         We removed 63 columns that could leak classification information:
