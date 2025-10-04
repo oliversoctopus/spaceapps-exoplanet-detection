@@ -119,17 +119,24 @@ def create_shap_waterfall_plot(shap_values, feature_names, max_display=10):
     plt.tight_layout()
     return fig
 
-def get_planet_radius(sample_data, koi_idx):
-    """Calculate planet radius from raw data if available"""
+@st.cache_data
+def load_raw_planet_data():
+    """Load planet radius data from raw dataset"""
     try:
         df_raw = pd.read_csv('../data/raw/kepler_koi.csv', comment='#')
-        if koi_idx < len(df_raw):
-            radius = df_raw.iloc[koi_idx]['koi_prad']
-            if pd.notna(radius):
-                return float(radius)
-    except:
-        pass
-    return None
+        # Create a mapping of indices to planet radius
+        radius_data = {}
+        for idx, row in df_raw.iterrows():
+            if pd.notna(row.get('koi_prad')):
+                radius_data[idx] = float(row['koi_prad'])
+        return radius_data
+    except Exception as e:
+        st.warning(f"Could not load raw planet data: {str(e)}")
+        return {}
+
+def get_planet_radius(koi_idx, radius_data):
+    """Get planet radius from cached raw data"""
+    return radius_data.get(koi_idx, None)
 
 def create_planet_comparison_3d(planet_radius, planet_type="Exoplanet"):
     """Create 3D visualization comparing planet size to Earth using Plotly"""
@@ -295,6 +302,9 @@ def main():
     # Load sample data for selected model
     X_data, y_data = load_sample_data(model_type)
 
+    # Load planet radius data from raw dataset
+    radius_data = load_raw_planet_data()
+
     # Main content tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔍 Sample Explorer", "📂 Import & Predict", "📊 Data Explorer", "📈 Model Performance", "📚 Documentation"])
 
@@ -383,7 +393,7 @@ def main():
             st.markdown("---")
             st.subheader("🪐 Planet Size Comparison")
 
-            planet_radius = get_planet_radius(X_data, sample_idx)
+            planet_radius = get_planet_radius(sample_idx, radius_data)
             if planet_radius is not None and planet_radius > 0:
                 viz_result = create_planet_comparison_3d(planet_radius)
                 if viz_result:
