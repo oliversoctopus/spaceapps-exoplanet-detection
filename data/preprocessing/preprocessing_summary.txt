@@ -2,10 +2,10 @@ PREPROCESSING SUMMARY
 ========================================
 
 Number of samples: 9564
-Number of features: 58
+Number of features: 52
 Planet percentage: 49.40%
 
-Features (58):
+Features (52):
   1. koi_gmag
   2. koi_rmag
   3. koi_imag
@@ -24,45 +24,39 @@ Features (58):
   16. koi_time0bk
   17. koi_time0bk_err1
   18. koi_time0bk_err2
-  19. koi_prad
-  20. koi_prad_err1
-  21. koi_prad_err2
-  22. koi_impact
-  23. koi_impact_err1
-  24. koi_impact_err2
-  25. koi_duration
-  26. koi_duration_err1
-  27. koi_duration_err2
-  28. koi_depth
-  29. koi_depth_err1
-  30. koi_depth_err2
-  31. koi_period
-  32. koi_period_err1
-  33. koi_period_err2
-  34. koi_steff
-  35. koi_steff_err1
-  36. koi_steff_err2
-  37. koi_slogg
-  38. koi_slogg_err1
-  39. koi_slogg_err2
-  40. koi_smet
-  41. koi_smet_err1
-  42. koi_smet_err2
-  43. koi_srad
-  44. koi_srad_err1
-  45. koi_srad_err2
-  46. koi_smass
-  47. koi_smass_err1
-  48. koi_smass_err2
-  49. koi_tce_plnt_num
-  50. koi_time0
-  51. koi_time0_err1
-  52. koi_time0_err2
-  53. koi_insol
-  54. koi_insol_err1
-  55. koi_insol_err2
-  56. koi_srho
-  57. koi_srho_err1
-  58. koi_srho_err2
+  19. koi_impact
+  20. koi_impact_err1
+  21. koi_impact_err2
+  22. koi_duration
+  23. koi_duration_err1
+  24. koi_duration_err2
+  25. koi_depth
+  26. koi_depth_err1
+  27. koi_depth_err2
+  28. koi_period
+  29. koi_period_err1
+  30. koi_period_err2
+  31. koi_steff
+  32. koi_steff_err1
+  33. koi_steff_err2
+  34. koi_slogg
+  35. koi_slogg_err1
+  36. koi_slogg_err2
+  37. koi_smet
+  38. koi_smet_err1
+  39. koi_smet_err2
+  40. koi_srad
+  41. koi_srad_err1
+  42. koi_srad_err2
+  43. koi_smass
+  44. koi_smass_err1
+  45. koi_smass_err2
+  46. koi_tce_plnt_num
+  47. koi_time0
+  48. koi_time0_err1
+  49. koi_time0_err2
+  50. koi_srho
+  51. koi_srho_err1
+  52. koi_srho_err2
 
 Note: Data splitting (train/val/test) is handled during model training.

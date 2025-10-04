@@ -115,7 +115,7 @@ def main():
         if models.get('baseline_model') is not None:
             available_models.append("Baseline (9 features)")
         if models.get('full_model') is not None:
-            available_models.append("Full (77 features)")
+            available_models.append("Full (52 features)")
 
         if not available_models:
             st.error("No models available!")
@@ -124,7 +124,7 @@ def main():
         selected_model = st.radio(
             "Choose model:",
             available_models,
-            help="Baseline model uses 9 core features, Full model uses 77 features"
+            help="Baseline model uses 9 core features, Full model uses 52 features (optimized)"
         )
 
         # Set active model based on selection
@@ -379,7 +379,7 @@ def main():
     with tab4:
         st.header("Documentation")
 
-        model_description = "Baseline (9 features)" if model_type == "baseline" else "Full (77 features)"
+        model_description = "Baseline (9 features)" if model_type == "baseline" else "Full (52 features, optimized)"
 
         st.markdown(f"""
         ## About This Project
@@ -406,21 +406,24 @@ def main():
         - Core transit signals: koi_period, koi_depth, koi_duration, koi_impact, koi_model_snr
         - Test Accuracy: ~84%
 
-        **Full Model (77 features):**
+        **Full Model (52 features, optimized):**
         - Comprehensive stellar properties (temperature, radius, mass, gravity, metallicity)
         - Transit signals (period, depth, duration, impact)
         - Photometry (magnitudes in multiple bands)
-        - Signal statistics and centroid offsets
-        - Test Accuracy: ~90%
+        - Signal statistics (SNR, evidence)
+        - Optimized with aggressive regularization to reduce overfitting
+        - Test Accuracy: ~87%, ROC-AUC: ~94%
 
         ### Data Leakage Prevention
-        We removed 63 columns that could leak classification information:
+        We removed 88 columns that could leak classification information:
         - False positive flags (koi_fpflag_*)
-        - Derived planet properties (koi_prad, koi_teq, koi_insol)
+        - Derived planet properties (koi_teq, koi_dor)
         - Disposition scores and vetting metadata
         - Model fitting outputs
+        - Centroid offset features (dikco_*, dicco_*, fwm_*)
 
-        This ensures the model learns from genuine observational data only.
+        The model uses only genuine observational data: stellar properties,
+        photometry, and transit signal measurements.
 
         ### Performance (Test Set)
         - **Accuracy**: {test_metrics['accuracy']:.1%}
