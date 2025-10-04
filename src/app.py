@@ -310,27 +310,22 @@ def main():
 
     with tab1:
         st.header("🔍 Sample Explorer & Analysis")
-        st.markdown("""
-        Select a Kepler Object of Interest (KOI) to view the model's prediction,
-        see a 3D visualization of the planet's size compared to Earth, and understand
-        which features drive the classification.
-        """)
 
         if X_data is not None and y_data is not None:
             # Load KOI names if available
             koi_names = load_koi_names()
 
-            if koi_names is not None and len(koi_names) == len(X_data):
-                st.subheader("Select a KOI by Name")
+            # Sidebar for sample selection
+            with st.sidebar:
+                st.markdown("---")
+                st.markdown("### 🔍 Sample Selection")
 
-                # Create filter options
-                col1, col2 = st.columns([2, 1])
-                with col1:
-                    filter_option = st.selectbox(
-                        "Filter KOIs by type:",
-                        ["All KOIs", "Planets Only", "False Positives Only"],
-                        key="tab1_filter"
-                    )
+                # Filter options
+                filter_option = st.radio(
+                    "Filter by type:",
+                    ["All KOIs", "Planets Only", "False Positives Only"],
+                    key="tab1_filter"
+                )
 
                 # Filter indices based on selection
                 if filter_option == "Planets Only":
@@ -340,22 +335,37 @@ def main():
                 else:
                     available_indices = list(range(len(X_data)))
 
-                available_kois = [(koi_names[i], i) for i in available_indices]
+                st.metric("Available Samples", len(available_indices))
 
-                with col2:
-                    st.metric("Available", len(available_kois))
+                # Slider for selection
+                if len(available_indices) > 0:
+                    slider_idx = st.slider(
+                        "Select sample:",
+                        0,
+                        len(available_indices) - 1,
+                        0,
+                        key="tab1_slider"
+                    )
+                    sample_idx = available_indices[slider_idx]
 
-                selected_koi = st.selectbox(
-                    "Choose KOI:",
-                    available_kois,
-                    format_func=lambda x: x[0],
-                    key="tab1_koi_select"
-                )
+                    # Display KOI name if available
+                    if koi_names is not None and len(koi_names) == len(X_data):
+                        st.info(f"**KOI:** {koi_names[sample_idx]}")
+                    else:
+                        st.info(f"**Sample Index:** {sample_idx}")
 
-                sample_idx = selected_koi[1]
-            else:
-                st.subheader("Select a Sample by Index")
-                sample_idx = st.slider("Select sample index", 0, len(X_data)-1, 0, key="tab1_sample_idx")
+                    # Navigation section
+                    st.markdown("---")
+                    st.markdown("### 📑 View Section")
+                    view_section = st.radio(
+                        "Jump to:",
+                        ["Prediction", "3D Visualization", "Feature Explanation"],
+                        key="tab1_section"
+                    )
+                else:
+                    st.warning("No samples available for this filter.")
+                    sample_idx = 0
+                    view_section = "Prediction"
 
             # Make prediction
             sample = X_data.iloc[sample_idx].values.reshape(1, -1)
@@ -363,98 +373,151 @@ def main():
             probability = model.predict_proba(sample)[0]
             actual = y_data.iloc[sample_idx]
 
-            # Display prediction results
-            st.markdown("---")
-            col1, col2, col3 = st.columns(3)
+            # Section 1: Prediction Results
+            if view_section == "Prediction" or view_section == "All":
+                st.subheader("📊 Prediction Results")
 
-            with col1:
-                st.markdown("**KOI Information:**")
-                if koi_names is not None and len(koi_names) == len(X_data):
-                    st.write(f"**Name:** {koi_names[sample_idx]}")
-                st.write(f"**Actual Label:** {'🌍 Planet' if actual == 1 else '❌ Non-Planet'}")
+                col1, col2, col3 = st.columns(3)
 
-            with col2:
-                st.markdown("**Model Prediction:**")
-                if prediction == 1:
-                    st.success(f"🌍 **Planet**")
-                    st.write(f"Confidence: {probability[1]:.1%}")
+                with col1:
+                    st.markdown("**KOI Information:**")
+                    if koi_names is not None and len(koi_names) == len(X_data):
+                        st.write(f"**Name:** {koi_names[sample_idx]}")
+                    st.write(f"**Index:** {sample_idx}")
+                    st.write(f"**Actual Label:** {'🌍 Planet' if actual == 1 else '❌ Non-Planet'}")
+
+                with col2:
+                    st.markdown("**Model Prediction:**")
+                    if prediction == 1:
+                        st.success(f"🌍 **Planet**")
+                        st.write(f"Confidence: {probability[1]:.1%}")
+                    else:
+                        st.warning(f"❌ **Non-Planet**")
+                        st.write(f"Confidence: {probability[0]:.1%}")
+
+                with col3:
+                    st.markdown("**Classification:**")
+                    if prediction == actual:
+                        st.success("✅ Correct")
+                    else:
+                        st.error("❌ Incorrect")
+
+                # Confidence gauge
+                st.markdown("**Prediction Confidence:**")
+                fig_gauge = go.Figure(go.Indicator(
+                    mode="gauge+number",
+                    value=probability[1] * 100,
+                    title={'text': "Planet Likelihood (%)"},
+                    gauge={
+                        'axis': {'range': [0, 100]},
+                        'bar': {'color': "#60a5fa" if prediction == 1 else "#f87171"},
+                        'steps': [
+                            {'range': [0, 50], 'color': "#1f2937"},
+                            {'range': [50, 100], 'color': "#374151"}
+                        ],
+                        'threshold': {
+                            'line': {'color': "white", 'width': 2},
+                            'thickness': 0.75,
+                            'value': 50
+                        }
+                    }
+                ))
+                fig_gauge.update_layout(
+                    height=300,
+                    paper_bgcolor='#1F2937',
+                    font=dict(color='#F3F4F6')
+                )
+                st.plotly_chart(fig_gauge, use_container_width=True)
+
+            # Section 2: 3D Visualization
+            elif view_section == "3D Visualization":
+                st.subheader("🪐 Planet Size Comparison")
+
+                planet_radius = get_planet_radius(sample_idx, radius_data)
+                if planet_radius is not None and planet_radius > 0:
+                    viz_result = create_planet_comparison_3d(planet_radius)
+                    if viz_result:
+                        fig_3d, planet_type = viz_result
+                        st.plotly_chart(fig_3d, use_container_width=True)
+
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Planet Type", planet_type)
+                        with col2:
+                            st.metric("Radius", f"{planet_radius:.2f}× Earth")
+                        with col3:
+                            if planet_radius < 1.5:
+                                st.info("Similar to Earth/Mars")
+                            elif planet_radius < 4:
+                                st.info("Larger than Earth")
+                            elif planet_radius < 10:
+                                st.info("Similar to Neptune")
+                            else:
+                                st.info("Similar to Jupiter")
+                    else:
+                        st.warning("Unable to create 3D visualization for this planet.")
                 else:
-                    st.warning(f"❌ **Non-Planet**")
-                    st.write(f"Confidence: {probability[0]:.1%}")
+                    st.info("Planet radius data not available for this KOI.")
+                    st.markdown("""
+                    **Note:** Radius data is only available for confirmed planets and candidates.
+                    False positives typically don't have reliable radius measurements.
+                    """)
 
-            with col3:
-                st.markdown("**Classification:**")
-                if prediction == actual:
-                    st.success("✅ Correct")
-                else:
-                    st.error("❌ Incorrect")
+            # Section 3: Feature Explanation
+            elif view_section == "Feature Explanation":
+                st.subheader("🔍 Feature Importance Analysis")
+                st.markdown("""
+                This analysis uses **SHAP (SHapley Additive exPlanations)** to show which features
+                contributed most to the model's prediction for this specific KOI.
+                """)
 
-            # 3D Planet Visualization
-            st.markdown("---")
-            st.subheader("🪐 Planet Size Comparison")
+                if st.button("🔍 Generate Explanation", type="primary", key="tab1_explain"):
+                    with st.spinner("Generating SHAP explanation... This may take a moment."):
+                        try:
+                            # Create background data
+                            background_size = min(100, len(X_data))
+                            background_data = X_data.sample(n=background_size, random_state=42)
 
-            planet_radius = get_planet_radius(sample_idx, radius_data)
-            if planet_radius is not None and planet_radius > 0:
-                viz_result = create_planet_comparison_3d(planet_radius)
-                if viz_result:
-                    fig_3d, planet_type = viz_result
-                    st.plotly_chart(fig_3d, use_container_width=True)
-                    st.info(f"**Planet Type:** {planet_type} | **Radius:** {planet_radius:.2f} × Earth's radius")
-                else:
-                    st.warning("Unable to create 3D visualization for this planet.")
-            else:
-                st.info("Planet radius data not available for this KOI.")
+                            # Get SHAP explainer
+                            explainer = get_shap_explainer(model, background_data)
 
-            # SHAP Explanation
-            st.markdown("---")
-            st.subheader("🔍 Feature Importance Analysis")
+                            # Calculate SHAP values
+                            shap_values = explainer(sample)
 
-            if st.button("🔍 Explain This Prediction", type="primary", key="tab1_explain"):
-                with st.spinner("Generating SHAP explanation... This may take a moment."):
-                    try:
-                        # Create background data
-                        background_size = min(100, len(X_data))
-                        background_data = X_data.sample(n=background_size, random_state=42)
+                            # Create waterfall plot
+                            st.markdown("**Feature Contribution Waterfall:**")
+                            fig_shap = create_shap_waterfall_plot(shap_values[0], feature_names, max_display=15)
+                            st.pyplot(fig_shap)
+                            plt.close()
 
-                        # Get SHAP explainer
-                        explainer = get_shap_explainer(model, background_data)
+                            # Show top contributing features
+                            st.markdown("**Top Contributing Features:**")
 
-                        # Calculate SHAP values
-                        shap_values = explainer(sample)
+                            feature_importance = pd.DataFrame({
+                                'Feature': feature_names,
+                                'SHAP Value': shap_values.values[0],
+                                'Feature Value': sample[0]
+                            })
+                            feature_importance['Absolute Impact'] = abs(feature_importance['SHAP Value'])
+                            feature_importance = feature_importance.sort_values('Absolute Impact', ascending=False)
 
-                        # Create waterfall plot
-                        fig_shap = create_shap_waterfall_plot(shap_values[0], feature_names, max_display=15)
-                        st.pyplot(fig_shap)
-                        plt.close()
+                            st.dataframe(
+                                feature_importance[['Feature', 'Feature Value', 'SHAP Value']].head(10).style.format({
+                                    'Feature Value': '{:.4f}',
+                                    'SHAP Value': '{:.4f}'
+                                }),
+                                use_container_width=True
+                            )
 
-                        # Show top contributing features
-                        st.markdown("**Top Contributing Features:**")
+                            st.markdown("""
+                            **How to interpret:**
+                            - **Positive SHAP values** (red bars): Push prediction towards Planet
+                            - **Negative SHAP values** (blue bars): Push prediction towards Non-Planet
+                            - **Magnitude**: Larger absolute values = stronger influence on the prediction
+                            """)
 
-                        feature_importance = pd.DataFrame({
-                            'Feature': feature_names,
-                            'SHAP Value': shap_values.values[0],
-                            'Feature Value': sample[0]
-                        })
-                        feature_importance['Absolute Impact'] = abs(feature_importance['SHAP Value'])
-                        feature_importance = feature_importance.sort_values('Absolute Impact', ascending=False)
-
-                        st.dataframe(
-                            feature_importance[['Feature', 'Feature Value', 'SHAP Value']].head(10).style.format({
-                                'Feature Value': '{:.4f}',
-                                'SHAP Value': '{:.4f}'
-                            }),
-                            use_container_width=True
-                        )
-
-                        st.markdown("""
-                        **Interpretation:**
-                        - **Positive SHAP values** (red): Push prediction towards Planet
-                        - **Negative SHAP values** (blue): Push prediction towards Non-Planet
-                        - **Magnitude**: Larger values = stronger influence
-                        """)
-
-                    except Exception as e:
-                        st.error(f"Error generating SHAP explanation: {str(e)}")
+                        except Exception as e:
+                            st.error(f"Error generating SHAP explanation: {str(e)}")
         else:
             st.warning("Sample data not available.")
 
