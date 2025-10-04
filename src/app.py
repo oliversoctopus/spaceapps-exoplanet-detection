@@ -119,6 +119,101 @@ def create_shap_waterfall_plot(shap_values, feature_names, max_display=10):
     plt.tight_layout()
     return fig
 
+def get_planet_radius(sample_data, koi_idx):
+    """Calculate planet radius from raw data if available"""
+    try:
+        df_raw = pd.read_csv('../data/raw/kepler_koi.csv', comment='#')
+        if koi_idx < len(df_raw):
+            radius = df_raw.iloc[koi_idx]['koi_prad']
+            if pd.notna(radius):
+                return float(radius)
+    except:
+        pass
+    return None
+
+def create_planet_comparison_3d(planet_radius, planet_type="Exoplanet"):
+    """Create 3D visualization comparing planet size to Earth using Plotly"""
+
+    # Planet colors based on size classification
+    if planet_radius is None:
+        return None
+
+    if planet_radius < 1.5:
+        planet_color = '#9F2B00'  # Terrestrial (Rust)
+        type_name = "Terrestrial"
+    elif planet_radius < 4:
+        planet_color = '#AF4425'  # Super Earth (Burnt Sienna)
+        type_name = "Super Earth"
+    elif planet_radius < 10:
+        planet_color = '#5B92E5'  # Neptune-like (Cornflower Blue)
+        type_name = "Neptune-like"
+    else:
+        planet_color = '#D2B48C'  # Gas Giant (Tan)
+        type_name = "Gas Giant"
+
+    earth_color = '#4F7CAC'  # Earth (Steel Blue)
+
+    # Create spheres with appropriate scaling
+    max_display_radius = 3
+    earth_display_radius = 0.5
+    planet_display_radius = min(max_display_radius, earth_display_radius * planet_radius)
+
+    # Create mesh grids for spheres
+    u = np.linspace(0, 2 * np.pi, 50)
+    v = np.linspace(0, np.pi, 50)
+
+    # Planet sphere
+    x_planet = planet_display_radius * np.outer(np.cos(u), np.sin(v)) - (planet_display_radius + 0.5)
+    y_planet = planet_display_radius * np.outer(np.sin(u), np.sin(v))
+    z_planet = planet_display_radius * np.outer(np.ones(np.size(u)), np.cos(v))
+
+    # Earth sphere
+    x_earth = earth_display_radius * np.outer(np.cos(u), np.sin(v)) + (earth_display_radius + 0.5)
+    y_earth = earth_display_radius * np.outer(np.sin(u), np.sin(v))
+    z_earth = earth_display_radius * np.outer(np.ones(np.size(u)), np.cos(v))
+
+    # Create 3D plot
+    fig = go.Figure()
+
+    # Add planet
+    fig.add_trace(go.Surface(
+        x=x_planet, y=y_planet, z=z_planet,
+        colorscale=[[0, planet_color], [1, planet_color]],
+        showscale=False,
+        name=f'{type_name} Planet',
+        hovertemplate=f'<b>{type_name}</b><br>Radius: {planet_radius:.2f}x Earth<extra></extra>'
+    ))
+
+    # Add Earth
+    fig.add_trace(go.Surface(
+        x=x_earth, y=y_earth, z=z_earth,
+        colorscale=[[0, earth_color], [1, earth_color]],
+        showscale=False,
+        name='Earth',
+        hovertemplate='<b>Earth</b><br>Radius: 1.00x Earth<extra></extra>'
+    ))
+
+    # Update layout
+    fig.update_layout(
+        title=f'Size Comparison: {type_name} ({planet_radius:.2f}x Earth) vs Earth',
+        scene=dict(
+            xaxis=dict(visible=False),
+            yaxis=dict(visible=False),
+            zaxis=dict(visible=False),
+            bgcolor='#111827',
+            camera=dict(
+                eye=dict(x=1.5, y=1.5, z=1.2)
+            )
+        ),
+        paper_bgcolor='#1F2937',
+        plot_bgcolor='#1F2937',
+        font=dict(color='#F3F4F6'),
+        height=500,
+        margin=dict(l=0, r=0, t=40, b=0)
+    )
+
+    return fig, type_name
+
 def main():
     # Header
     st.markdown('<h1 class="main-header">🪐 NASA Exoplanet Detection System</h1>', unsafe_allow_html=True)
@@ -201,130 +296,14 @@ def main():
     X_data, y_data = load_sample_data(model_type)
 
     # Main content tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔮 Predictions", "🔍 Feature Explainer", "📊 Data Explorer", "📈 Model Performance", "📚 Documentation"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔍 Sample Explorer", "📂 Import & Predict", "📊 Data Explorer", "📈 Model Performance", "📚 Documentation"])
 
     with tab1:
-        st.header("Exoplanet Prediction Interface")
-
-        prediction_method = st.radio(
-            "Choose prediction method:",
-            ["Sample Data", "Upload CSV"],
-            help=f"Manual input not available - model uses {len(feature_names)} specialized features"
-        )
-
-        if prediction_method == "Sample Data":
-            st.subheader("Test with Sample Data")
-
-            if X_data is not None and y_data is not None:
-                sample_idx = st.slider("Select sample index", 0, len(X_data)-1, 0, key="prediction_sample_idx")
-
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    st.markdown("**Sample Features (first 10):**")
-                    sample = X_data.iloc[sample_idx]
-                    for i, (feat, val) in enumerate(sample.items()):
-                        if i < 10:
-                            st.write(f"- {feat}: {val:.4f}")
-
-                with col2:
-                    if st.button("Classify Sample", type="primary"):
-                        sample_input = sample.values.reshape(1, -1)
-                        prediction = model.predict(sample_input)[0]
-                        probability = model.predict_proba(sample_input)[0]
-                        actual = y_data.iloc[sample_idx]
-
-                        st.markdown("**Results:**")
-                        if prediction == 1:
-                            st.success(f"🌍 Predicted: PLANET (confidence: {probability[1]:.1%})")
-                        else:
-                            st.warning(f"❌ Predicted: NON-PLANET (confidence: {probability[0]:.1%})")
-
-                        if actual == 1:
-                            st.info("Actual: PLANET")
-                        else:
-                            st.info("Actual: NON-PLANET")
-
-                        if prediction == actual:
-                            st.success("✅ Correct prediction!")
-                        else:
-                            st.error("❌ Incorrect prediction")
-
-                        # Confidence gauge
-                        fig_gauge = go.Figure(go.Indicator(
-                            mode="gauge+number",
-                            value=probability[1] * 100,
-                            title={'text': "Planet Likelihood"},
-                            gauge={
-                                'axis': {'range': [None, 100]},
-                                'bar': {'color': "darkgreen" if prediction == 1 else "darkred"},
-                                'steps': [
-                                    {'range': [0, 50], 'color': "lightgray"},
-                                    {'range': [50, 100], 'color': "lightgreen"}
-                                ],
-                                'threshold': {
-                                    'line': {'color': "red", 'width': 4},
-                                    'thickness': 0.75,
-                                    'value': 50
-                                }
-                            }
-                        ))
-                        fig_gauge.update_layout(height=300)
-                        st.plotly_chart(fig_gauge, use_container_width=True)
-
-        else:  # Upload CSV
-            st.subheader("Upload Transit Data")
-            st.info(f"CSV must contain {len(feature_names)} columns: {', '.join(feature_names[:5])}... and {len(feature_names)-5} more")
-
-            uploaded_file = st.file_uploader(
-                "Choose a preprocessed CSV file",
-                type="csv"
-            )
-
-            if uploaded_file is not None:
-                try:
-                    df = pd.read_csv(uploaded_file)
-                    st.write(f"Loaded {len(df)} samples")
-
-                    # Check for required columns
-                    missing_cols = set(feature_names) - set(df.columns)
-                    if missing_cols:
-                        st.error(f"Missing columns: {missing_cols}")
-                    else:
-                        if st.button("Classify All Samples", type="primary"):
-                            # Make predictions
-                            predictions = model.predict(df[feature_names])
-                            probabilities = model.predict_proba(df[feature_names])[:, 1]
-
-                            # Add results to dataframe
-                            df['Prediction'] = ['Planet' if p == 1 else 'Non-Planet' for p in predictions]
-                            df['Planet_Probability'] = probabilities
-
-                            # Display results
-                            st.success(f"Classification complete!")
-                            st.write(f"Planets detected: {sum(predictions)} / {len(predictions)}")
-
-                            # Show results table
-                            st.dataframe(df[['Prediction', 'Planet_Probability'] + feature_names[:5]])
-
-                            # Download results
-                            csv = df.to_csv(index=False)
-                            st.download_button(
-                                label="Download Results as CSV",
-                                data=csv,
-                                file_name=f"exoplanet_predictions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                mime="text/csv"
-                            )
-
-                except Exception as e:
-                    st.error(f"Error processing file: {str(e)}")
-
-    with tab2:
-        st.header("🔍 Feature Importance Explainer")
+        st.header("🔍 Sample Explorer & Analysis")
         st.markdown("""
-        This tool uses **SHAP (SHapley Additive exPlanations)** to explain which features
-        contribute most to the model's prediction for a specific KOI. Features in **red**
-        push the prediction towards "Planet", while features in **blue** push it towards "Non-Planet".
+        Select a Kepler Object of Interest (KOI) to view the model's prediction,
+        see a 3D visualization of the planet's size compared to Earth, and understand
+        which features drive the classification.
         """)
 
         if X_data is not None and y_data is not None:
@@ -339,13 +318,14 @@ def main():
                 with col1:
                     filter_option = st.selectbox(
                         "Filter KOIs by type:",
-                        ["All KOIs", "Confirmed Planets", "Candidate Planets", "False Positives"]
+                        ["All KOIs", "Planets Only", "False Positives Only"],
+                        key="tab1_filter"
                     )
 
                 # Filter indices based on selection
-                if filter_option == "Confirmed Planets" or filter_option == "Candidate Planets":
+                if filter_option == "Planets Only":
                     available_indices = [i for i, label in enumerate(y_data) if label == 1]
-                elif filter_option == "False Positives":
+                elif filter_option == "False Positives Only":
                     available_indices = [i for i, label in enumerate(y_data) if label == 0]
                 else:
                     available_indices = list(range(len(X_data)))
@@ -358,71 +338,88 @@ def main():
                 selected_koi = st.selectbox(
                     "Choose KOI:",
                     available_kois,
-                    format_func=lambda x: x[0]
+                    format_func=lambda x: x[0],
+                    key="tab1_koi_select"
                 )
 
                 sample_idx = selected_koi[1]
             else:
                 st.subheader("Select a Sample by Index")
-                sample_idx = st.slider("Select sample index", 0, len(X_data)-1, 0, key="explainer_sample_idx")
-                st.info(f"Sample #{sample_idx}")
+                sample_idx = st.slider("Select sample index", 0, len(X_data)-1, 0, key="tab1_sample_idx")
 
-            # Display sample information
-            col1, col2 = st.columns(2)
+            # Make prediction
+            sample = X_data.iloc[sample_idx].values.reshape(1, -1)
+            prediction = model.predict(sample)[0]
+            probability = model.predict_proba(sample)[0]
+            actual = y_data.iloc[sample_idx]
+
+            # Display prediction results
+            st.markdown("---")
+            col1, col2, col3 = st.columns(3)
 
             with col1:
-                st.markdown("**Sample Information:**")
+                st.markdown("**KOI Information:**")
                 if koi_names is not None and len(koi_names) == len(X_data):
-                    st.write(f"**KOI Name:** {koi_names[sample_idx]}")
-                actual = y_data.iloc[sample_idx]
+                    st.write(f"**Name:** {koi_names[sample_idx]}")
                 st.write(f"**Actual Label:** {'🌍 Planet' if actual == 1 else '❌ Non-Planet'}")
 
             with col2:
-                # Make prediction
-                sample = X_data.iloc[sample_idx].values.reshape(1, -1)
-                prediction = model.predict(sample)[0]
-                probability = model.predict_proba(sample)[0]
-
                 st.markdown("**Model Prediction:**")
                 if prediction == 1:
-                    st.success(f"🌍 **Planet** (confidence: {probability[1]:.1%})")
+                    st.success(f"🌍 **Planet**")
+                    st.write(f"Confidence: {probability[1]:.1%}")
                 else:
-                    st.warning(f"❌ **Non-Planet** (confidence: {probability[0]:.1%})")
+                    st.warning(f"❌ **Non-Planet**")
+                    st.write(f"Confidence: {probability[0]:.1%}")
 
+            with col3:
+                st.markdown("**Classification:**")
                 if prediction == actual:
-                    st.success("✅ Correct prediction!")
+                    st.success("✅ Correct")
                 else:
-                    st.error("❌ Incorrect prediction")
+                    st.error("❌ Incorrect")
 
-            # Generate SHAP explanation
-            if st.button("🔍 Explain This Prediction", type="primary"):
+            # 3D Planet Visualization
+            st.markdown("---")
+            st.subheader("🪐 Planet Size Comparison")
+
+            planet_radius = get_planet_radius(X_data, sample_idx)
+            if planet_radius is not None and planet_radius > 0:
+                viz_result = create_planet_comparison_3d(planet_radius)
+                if viz_result:
+                    fig_3d, planet_type = viz_result
+                    st.plotly_chart(fig_3d, use_container_width=True)
+                    st.info(f"**Planet Type:** {planet_type} | **Radius:** {planet_radius:.2f} × Earth's radius")
+                else:
+                    st.warning("Unable to create 3D visualization for this planet.")
+            else:
+                st.info("Planet radius data not available for this KOI.")
+
+            # SHAP Explanation
+            st.markdown("---")
+            st.subheader("🔍 Feature Importance Analysis")
+
+            if st.button("🔍 Explain This Prediction", type="primary", key="tab1_explain"):
                 with st.spinner("Generating SHAP explanation... This may take a moment."):
                     try:
-                        # Create background data (sample of training data)
+                        # Create background data
                         background_size = min(100, len(X_data))
                         background_data = X_data.sample(n=background_size, random_state=42)
 
                         # Get SHAP explainer
                         explainer = get_shap_explainer(model, background_data)
 
-                        # Calculate SHAP values for this sample
+                        # Calculate SHAP values
                         shap_values = explainer(sample)
 
                         # Create waterfall plot
-                        st.subheader("Feature Contribution Waterfall Plot")
-                        st.markdown("""
-                        This plot shows how each feature pushes the prediction from the base value (average model output)
-                        to the final prediction. The base value represents what the model would predict on average.
-                        """)
-
-                        fig = create_shap_waterfall_plot(shap_values[0], feature_names, max_display=15)
-                        st.pyplot(fig)
+                        fig_shap = create_shap_waterfall_plot(shap_values[0], feature_names, max_display=15)
+                        st.pyplot(fig_shap)
                         plt.close()
 
                         # Show top contributing features
-                        st.subheader("Top Contributing Features")
+                        st.markdown("**Top Contributing Features:**")
 
-                        # Get feature importance for this prediction
                         feature_importance = pd.DataFrame({
                             'Feature': feature_names,
                             'SHAP Value': shap_values.values[0],
@@ -431,7 +428,6 @@ def main():
                         feature_importance['Absolute Impact'] = abs(feature_importance['SHAP Value'])
                         feature_importance = feature_importance.sort_values('Absolute Impact', ascending=False)
 
-                        # Display top 10 features
                         st.dataframe(
                             feature_importance[['Feature', 'Feature Value', 'SHAP Value']].head(10).style.format({
                                 'Feature Value': '{:.4f}',
@@ -441,17 +437,79 @@ def main():
                         )
 
                         st.markdown("""
-                        **How to interpret:**
-                        - **Positive SHAP values** (push towards Planet): These features increase the likelihood of a planet classification
-                        - **Negative SHAP values** (push towards Non-Planet): These features decrease the likelihood of a planet classification
-                        - **Magnitude**: Larger absolute values indicate stronger influence on the prediction
+                        **Interpretation:**
+                        - **Positive SHAP values** (red): Push prediction towards Planet
+                        - **Negative SHAP values** (blue): Push prediction towards Non-Planet
+                        - **Magnitude**: Larger values = stronger influence
                         """)
 
                     except Exception as e:
                         st.error(f"Error generating SHAP explanation: {str(e)}")
-                        st.info("SHAP analysis may fail for some models. Try selecting a different sample.")
         else:
-            st.warning("Sample data not available for feature explanation.")
+            st.warning("Sample data not available.")
+
+    with tab2:
+        st.header("📂 Import & Predict on CSV Data")
+        st.markdown("""
+        Upload your own preprocessed exoplanet transit data to get predictions from the model.
+        The CSV must contain all required features with proper preprocessing.
+        """)
+
+        st.info(f"**Required:** CSV must contain {len(feature_names)} columns: {', '.join(feature_names[:5])}... and {len(feature_names)-5} more")
+
+        uploaded_file = st.file_uploader(
+            "Choose a preprocessed CSV file",
+            type="csv",
+            key="tab2_upload"
+        )
+
+        if uploaded_file is not None:
+            try:
+                df = pd.read_csv(uploaded_file)
+                st.success(f"✅ Loaded {len(df)} samples")
+
+                # Check for required columns
+                missing_cols = set(feature_names) - set(df.columns)
+                if missing_cols:
+                    st.error(f"❌ Missing columns: {', '.join(list(missing_cols)[:10])}")
+                else:
+                    if st.button("🔮 Classify All Samples", type="primary", key="tab2_classify"):
+                        with st.spinner("Making predictions..."):
+                            # Make predictions
+                            predictions = model.predict(df[feature_names])
+                            probabilities = model.predict_proba(df[feature_names])[:, 1]
+
+                            # Add results to dataframe
+                            df['Prediction'] = ['Planet' if p == 1 else 'Non-Planet' for p in predictions]
+                            df['Planet_Probability'] = probabilities
+
+                            # Display results
+                            st.success(f"✅ Classification complete!")
+
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.metric("Planets Detected", sum(predictions))
+                            with col2:
+                                st.metric("Non-Planets Detected", len(predictions) - sum(predictions))
+
+                            # Show results table
+                            st.subheader("Prediction Results")
+                            st.dataframe(
+                                df[['Prediction', 'Planet_Probability'] + feature_names[:5]].head(50),
+                                use_container_width=True
+                            )
+
+                            # Download results
+                            csv = df.to_csv(index=False)
+                            st.download_button(
+                                label="📥 Download Results as CSV",
+                                data=csv,
+                                file_name=f"exoplanet_predictions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                mime="text/csv"
+                            )
+
+            except Exception as e:
+                st.error(f"❌ Error processing file: {str(e)}")
 
     with tab3:
         st.header("Data Explorer")
