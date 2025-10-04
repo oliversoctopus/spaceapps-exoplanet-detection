@@ -93,6 +93,19 @@ class ExoplanetPreprocessor:
             # False positive flags (derived from vetting process - data leakage)
             'koi_fpflag_nt', 'koi_fpflag_ss', 'koi_fpflag_co', 'koi_fpflag_ec',
 
+            # Centroid offset features (high mutual information - potential leakage)
+            # Flux-weighted motion (FWM) features
+            'koi_fwm_stat_sig', 'koi_fwm_sra', 'koi_fwm_sra_err',
+            'koi_fwm_sdec', 'koi_fwm_sdec_err', 'koi_fwm_srao', 'koi_fwm_srao_err',
+            'koi_fwm_sdeco', 'koi_fwm_sdeco_err', 'koi_fwm_prao', 'koi_fwm_prao_err',
+            'koi_fwm_pdeco', 'koi_fwm_pdeco_err',
+            # Difference image centroid offset (DICCO) features
+            'koi_dicco_mra', 'koi_dicco_mra_err', 'koi_dicco_mdec', 'koi_dicco_mdec_err',
+            'koi_dicco_msky', 'koi_dicco_msky_err',
+            # Difference image Kepler band centroid offset (DIKCO) features
+            'koi_dikco_mra', 'koi_dikco_mra_err', 'koi_dikco_mdec', 'koi_dikco_mdec_err',
+            'koi_dikco_msky', 'koi_dikco_msky_err',
+
             # Data links and identifiers
             'koi_datalink_dvr', 'koi_datalink_dvs',
             'kepoi_name', 'kepid',

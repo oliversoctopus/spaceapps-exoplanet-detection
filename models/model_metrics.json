@@ -1,28 +1,28 @@
 {
   "metrics": {
     "train": {
-      "accuracy": 0.9849118613683896,
-      "precision": 0.9839975845410628,
-      "recall": 0.9854853341397036,
-      "f1": 0.9847408974165281,
-      "roc_auc": 0.9989565039453847
+      "accuracy": 0.9617567971317598,
+      "precision": 0.9626933575978162,
+      "recall": 0.9597822800120955,
+      "f1": 0.9612356147789218,
+      "roc_auc": 0.9939514636844535
     },
     "validation": {
-      "accuracy": 0.9059561128526645,
-      "precision": 0.9154013015184381,
-      "recall": 0.8921775898520085,
-      "f1": 0.9036402569593148,
-      "roc_auc": 0.9633865077839707
+      "accuracy": 0.8432601880877743,
+      "precision": 0.8357588357588358,
+      "recall": 0.8498942917547568,
+      "f1": 0.8427672955974843,
+      "roc_auc": 0.9234357800569601
     },
     "test": {
-      "accuracy": 0.9043387349712494,
-      "precision": 0.9018987341772152,
-      "recall": 0.9047619047619048,
-      "f1": 0.9033280507131537,
-      "roc_auc": 0.9705813546722637
+      "accuracy": 0.8635650810245687,
+      "precision": 0.8693304535637149,
+      "recall": 0.8518518518518519,
+      "f1": 0.860502405130946,
+      "roc_auc": 0.9433315842406751
     }
   },
-  "feature_count": 77,
+  "feature_count": 52,
   "feature_names": [
     "koi_gmag",
     "koi_rmag",
@@ -69,31 +69,6 @@
     "koi_smass",
     "koi_smass_err1",
     "koi_smass_err2",
-    "koi_fwm_stat_sig",
-    "koi_fwm_sra",
-    "koi_fwm_sra_err",
-    "koi_fwm_sdec",
-    "koi_fwm_sdec_err",
-    "koi_fwm_srao",
-    "koi_fwm_srao_err",
-    "koi_fwm_sdeco",
-    "koi_fwm_sdeco_err",
-    "koi_fwm_prao",
-    "koi_fwm_prao_err",
-    "koi_fwm_pdeco",
-    "koi_fwm_pdeco_err",
-    "koi_dicco_mra",
-    "koi_dicco_mra_err",
-    "koi_dicco_mdec",
-    "koi_dicco_mdec_err",
-    "koi_dicco_msky",
-    "koi_dicco_msky_err",
-    "koi_dikco_mra",
-    "koi_dikco_mra_err",
-    "koi_dikco_mdec",
-    "koi_dikco_mdec_err",
-    "koi_dikco_msky",
-    "koi_dikco_msky_err",
     "koi_tce_plnt_num",
     "koi_time0",
     "koi_time0_err1",
