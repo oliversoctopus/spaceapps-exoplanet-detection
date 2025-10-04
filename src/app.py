@@ -99,7 +99,7 @@ def load_sample_data(model_type):
 def load_koi_names():
     """Load original KOI names for sample selection"""
     try:
-        df = pd.read_csv('../data/raw/kepler_koi.csv', comment='#')
+        df = pd.read_csv('../data/kepler_koi.csv', comment='#')
         # Get KOI names that exist in our preprocessed data
         df_processed = pd.read_csv('../data/preprocessing/kepler_koi_preprocessed.csv')
         return df['kepoi_name'].iloc[:len(df_processed)].tolist()
@@ -123,7 +123,7 @@ def create_shap_waterfall_plot(shap_values, feature_names, max_display=10):
 def load_raw_planet_data():
     """Load planet radius data from raw dataset"""
     try:
-        df_raw = pd.read_csv('../data/raw/kepler_koi.csv', comment='#')
+        df_raw = pd.read_csv('../data/kepler_koi.csv', comment='#')
         # Create a mapping of indices to planet radius
         radius_data = {}
         for idx, row in df_raw.iterrows():
