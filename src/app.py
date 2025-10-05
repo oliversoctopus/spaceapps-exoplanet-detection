@@ -232,6 +232,7 @@ def create_threejs_visualization(system_data, view_mode='system'):
     planet_radius = system_data.get('planet_radius', 1.0)
     star_radius = system_data.get('star_radius', 1.0)
     star_temp = system_data.get('star_temp', 5778)
+    orbital_period = system_data.get('orbital_period', 10.0)
 
     # Handle missing data
     if pd.isna(planet_radius):
@@ -240,6 +241,8 @@ def create_threejs_visualization(system_data, view_mode='system'):
         star_radius = 1.0
     if pd.isna(star_temp):
         star_temp = 5778
+    if pd.isna(orbital_period):
+        orbital_period = 10.0
 
     # Determine planet color based on size
     if planet_radius < 1.5:
@@ -534,7 +537,11 @@ def create_threejs_visualization(system_data, view_mode='system'):
             camera.position.set(50, 30, 80);
             camera.lookAt(0, 0, 0);
 
-            // Animation
+            // Animation with orbital period-based speed
+            // Calculate orbital speed: one full orbit = orbital_period seconds
+            const orbitalPeriod = {orbital_period};  // in days
+            const orbitalSpeed = (2 * Math.PI) / orbitalPeriod;  // radians per second
+
             const clock = new THREE.Clock();
             function animate() {{
                 requestAnimationFrame(animate);
@@ -544,7 +551,8 @@ def create_threejs_visualization(system_data, view_mode='system'):
                 starMesh.rotation.y += delta * 0.1;
                 planetMesh.rotation.y += delta * 0.3;
 
-                const time = clock.getElapsedTime() * 0.2;
+                // Use orbital period to control speed (e.g., 9 day period = 9 second orbit)
+                const time = clock.getElapsedTime() * orbitalSpeed;
                 planetMesh.position.x = starMesh.position.x + Math.cos(time) * orbitRadius;
                 planetMesh.position.z = Math.sin(time) * orbitRadius;
 
