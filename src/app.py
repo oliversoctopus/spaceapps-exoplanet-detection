@@ -961,16 +961,16 @@ def main():
                 st.markdown("### 📑 View Section")
                 view_section = st.radio(
                     "Jump to:",
-                    ["Prediction", "3D Visualization", "Feature Explanation"],
+                    ["3D Visualization", "Prediction", "Feature Explanation"],
                     key="tab1_section"
                 )
             else:
                 st.warning("No samples available for this filter.")
                 sample_idx = 0
-                view_section = "Prediction"
+                view_section = "3D Visualization"
         else:
             sample_idx = 0
-            view_section = "Prediction"
+            view_section = "3D Visualization"
 
         # Model performance and about section
         st.markdown("### Model Performance")
