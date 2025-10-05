@@ -68,11 +68,11 @@ def load_models():
 
     # Load baseline model
     try:
-        with open('../models/baseline_lightgbm_model.pkl', 'rb') as f:
+        with open('models/baseline_lightgbm_model.pkl', 'rb') as f:
             models['baseline_model'] = pickle.load(f)
-        with open('../models/baseline_model_metrics.json', 'r') as f:
+        with open('models/baseline_model_metrics.json', 'r') as f:
             models['baseline_metrics'] = json.load(f)
-        with open('../data/preprocessing/baseline_preprocessor.pkl', 'rb') as f:
+        with open('data/preprocessing/baseline_preprocessor.pkl', 'rb') as f:
             models['baseline_preprocessor'] = pickle.load(f)
     except Exception as e:
         st.warning(f"Baseline model not available: {str(e)}")
@@ -80,11 +80,11 @@ def load_models():
 
     # Load full model
     try:
-        with open('../models/lightgbm_model.pkl', 'rb') as f:
+        with open('models/lightgbm_model.pkl', 'rb') as f:
             models['full_model'] = pickle.load(f)
-        with open('../models/model_metrics.json', 'r') as f:
+        with open('models/model_metrics.json', 'r') as f:
             models['full_metrics'] = json.load(f)
-        with open('../data/preprocessing/preprocessor.pkl', 'rb') as f:
+        with open('data/preprocessing/preprocessor.pkl', 'rb') as f:
             models['full_preprocessor'] = pickle.load(f)
     except Exception as e:
         st.warning(f"Full model not available: {str(e)}")
@@ -97,9 +97,9 @@ def load_sample_data(model_type):
     """Load preprocessed data for demonstration"""
     try:
         if model_type == "baseline":
-            df = pd.read_csv('../data/preprocessing/kepler_koi_baseline.csv')
+            df = pd.read_csv('data/preprocessing/kepler_koi_baseline.csv')
         else:
-            df = pd.read_csv('../data/preprocessing/kepler_koi_preprocessed.csv')
+            df = pd.read_csv('data/preprocessing/kepler_koi_preprocessed.csv')
         X = df.drop('label', axis=1)
         y = df['label']
         return X, y
@@ -111,9 +111,9 @@ def load_sample_data(model_type):
 def load_koi_names():
     """Load original KOI names for sample selection"""
     try:
-        df = pd.read_csv('../data/kepler_koi.csv', comment='#')
+        df = pd.read_csv('data/kepler_koi.csv', comment='#')
         # Get KOI names that exist in our preprocessed data
-        df_processed = pd.read_csv('../data/preprocessing/kepler_koi_preprocessed.csv')
+        df_processed = pd.read_csv('data/preprocessing/kepler_koi_preprocessed.csv')
         return df['kepoi_name'].iloc[:len(df_processed)].tolist()
     except Exception as e:
         return None
@@ -123,7 +123,7 @@ def load_candidate_kois(model_type):
     """Load KOIs marked as CANDIDATE (unconfirmed) for prediction"""
     try:
         # Load raw data
-        df_raw = pd.read_csv('../data/kepler_koi.csv', comment='#')
+        df_raw = pd.read_csv('data/kepler_koi.csv', comment='#')
 
         # Filter for candidates only
         candidates_df = df_raw[df_raw['koi_disposition'] == 'CANDIDATE'].copy()
@@ -133,10 +133,10 @@ def load_candidate_kois(model_type):
 
         # Load preprocessor
         if model_type == "baseline":
-            with open('../data/preprocessing/baseline_preprocessor.pkl', 'rb') as f:
+            with open('data/preprocessing/baseline_preprocessor.pkl', 'rb') as f:
                 preprocessor = pickle.load(f)
         else:
-            with open('../data/preprocessing/preprocessor.pkl', 'rb') as f:
+            with open('data/preprocessing/preprocessor.pkl', 'rb') as f:
                 preprocessor = pickle.load(f)
 
         feature_cols = preprocessor['feature_columns']
@@ -185,7 +185,7 @@ def create_shap_waterfall_plot(shap_values, feature_names, max_display=10):
 def load_raw_planet_data():
     """Load complete system data from raw dataset"""
     try:
-        df_raw = pd.read_csv('../data/kepler_koi.csv', comment='#')
+        df_raw = pd.read_csv('data/kepler_koi.csv', comment='#')
         # Create a mapping of indices to system data
         system_data = {}
         for idx, row in df_raw.iterrows():
