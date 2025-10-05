@@ -1476,7 +1476,34 @@ def main():
 
         with col2:
             st.subheader("Model Information")
-            st.json(metrics['model_params'])
+
+            # Extract key parameters from model_params
+            params = metrics['model_params']
+
+            # Display in a cleaner format
+            st.markdown("**Algorithm:** LightGBM (Light Gradient Boosting Machine)")
+            st.markdown(f"**Number of Trees:** {params.get('n_estimators', 'N/A')}")
+            st.markdown(f"**Learning Rate:** {params.get('learning_rate', 'N/A')}")
+            st.markdown(f"**Max Depth:** {params.get('max_depth', 'N/A')}")
+
+            if 'num_leaves' in params:
+                st.markdown(f"**Number of Leaves:** {params.get('num_leaves', 'N/A')}")
+
+            if 'min_child_samples' in params:
+                st.markdown(f"**Min Samples per Leaf:** {params.get('min_child_samples', 'N/A')}")
+
+            if 'reg_alpha' in params or 'reg_lambda' in params:
+                st.markdown("**Regularization:**")
+                if 'reg_alpha' in params:
+                    st.markdown(f"  - L1 (Alpha): {params.get('reg_alpha', 0)}")
+                if 'reg_lambda' in params:
+                    st.markdown(f"  - L2 (Lambda): {params.get('reg_lambda', 0)}")
+
+            st.markdown(f"**Random Seed:** {params.get('random_state', 'N/A')}")
+
+            # Show full JSON in expander for advanced users
+            with st.expander("Show all parameters (advanced)"):
+                st.json(params)
 
     with tab6:
         st.header("Documentation")
