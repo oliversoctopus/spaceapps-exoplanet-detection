@@ -231,14 +231,14 @@ This project was developed for the NASA Space Apps Challenge 2025, addressing th
 **"A World Away: Hunting for Exoplanets with AI"**
 
 ### Challenge Goals Met
-✅ Automated exoplanet detection from transit data
-✅ High-accuracy machine learning models (87% accuracy, 94% ROC-AUC)
-✅ Rigorous data leakage prevention for genuine learning
-✅ Complete data pipeline (download → preprocess → train → deploy)
-✅ Interactive 3D visualizations with size comparisons
-✅ SHAP explainability for model interpretability
-✅ Candidate predictor for unconfirmed KOIs
-✅ Open-source implementation with documentation
+✅ Automated exoplanet detection from transit data\
+✅ High-accuracy machine learning models (87% accuracy, 94% ROC-AUC)\
+✅ Rigorous data leakage prevention for genuine learning\
+✅ Complete data pipeline (download → preprocess → train → deploy)\
+✅ Interactive 3D visualizations with size comparisons\
+✅ SHAP explainability for model interpretability\
+✅ Candidate predictor for unconfirmed KOIs\
+✅ Open-source implementation with documentation\
 ✅ **Deployed web application** on Streamlit Cloud
 
 ## 📚 References
