@@ -9,28 +9,42 @@ An AI-powered system for detecting exoplanets from Kepler Space Telescope transi
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.40.2-red)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
+## 🌐 Live Demo
+
+**Try it now:** [https://spaceapps-exoplanet-detector.streamlit.app/](https://spaceapps-exoplanet-detector.streamlit.app/)
+
 ## 🚀 Project Overview
 
 This project automates the detection of exoplanets from transit signals in the Kepler Space Telescope data, reducing manual vetting by astronomers. Using supervised machine learning with LightGBM, we classify Kepler Objects of Interest (KOI) as either confirmed/candidate planets or false positives.
 
 ### Key Features
-- **High-Performance ML Model**: LightGBM classifier achieving 90.3% F1-score and 97.1% ROC-AUC
-- **Data Leakage Prevention**: Rigorous removal of 63 leakage columns for genuine learning
-- **Interactive Web Application**: Streamlit-based UI for real-time predictions
-- **3D Solar System Visualization**: Three.js-powered interactive visualization of exoplanet systems
-- **SHAP Explainability**: Feature importance analysis for individual predictions
-- **Comprehensive Data Pipeline**: Automated download, preprocessing, and model training
-- **Visualization Dashboard**: Interactive plots for data exploration and model interpretation
+- **🌐 Live Web Application**: Deployed on Streamlit Cloud for instant access
+- **🎯 High-Performance ML Models**: Baseline (84% accuracy, 93% ROC-AUC) and Full (87% accuracy, 94% ROC-AUC)
+- **🔮 Candidate Predictor**: Analyze unconfirmed KOI candidates with confidence scores
+- **🌌 3D Visualizations**: Interactive Three.js solar system views with size comparisons
+- **📊 SHAP Explainability**: Understand which features drive each prediction
+- **🛡️ Data Leakage Prevention**: Rigorous removal of 88 leakage columns for genuine learning
+- **📈 Interactive Dashboard**: Explore data, model performance, and make predictions
 
 ## 📊 Model Performance
 
+### Full Model (52 features, optimized)
 | Metric | Test Set Score |
 |--------|-------|
-| **Accuracy** | 90.4% |
-| **Precision** | 90.2% |
-| **Recall** | 90.5% |
-| **F1-Score** | 90.3% |
-| **ROC-AUC** | 97.1% |
+| **Accuracy** | 87.4% |
+| **Precision** | 86.9% |
+| **Recall** | 88.0% |
+| **F1-Score** | 87.4% |
+| **ROC-AUC** | 94.3% |
+
+### Baseline Model (9 core features)
+| Metric | Test Set Score |
+|--------|-------|
+| **Accuracy** | 84.3% |
+| **Precision** | 84.4% |
+| **Recall** | 83.7% |
+| **F1-Score** | 84.1% |
+| **ROC-AUC** | 92.7% |
 
 ## 🛠️ Installation
 
@@ -93,21 +107,28 @@ nasa-exoplanet-detection/
 - **Download Method**: Automatic via TAP API (`cumulative` table)
 - **Size**: 9,564 transit signals
 - **Raw Columns**: 153 features
-- **Clean Features**: 77 features (after removing 63 leakage columns)
+- **Clean Features**: 52 features (Full model) / 9 features (Baseline model)
 - **Target**: Binary classification (Planet vs False Positive)
-- **Class Distribution**: 49.4% planets, 50.6% non-planets
+- **Class Distribution**: ~50% planets, ~50% non-planets (balanced)
 
 ### Data Leakage Prevention
 
-We carefully removed **63 columns** that could leak classification information:
+We carefully removed **88 columns** that could leak classification information:
 - **False positive flags** (koi_fpflag_nt, koi_fpflag_ss, koi_fpflag_co, koi_fpflag_ec)
-- **Derived planet properties** (koi_prad, koi_teq, koi_insol - computed assuming planet exists)
+- **Derived planet properties** (koi_prad, koi_teq, koi_insol, koi_dor, koi_incl, etc.)
 - **Disposition scores** (koi_score, koi_pdisposition - vetting outputs)
+- **Centroid offsets** (dikco_*, dicco_*, fwm_* - post-vetting features)
 - **Model fitting outputs** (fitted parameters that use disposition)
 
 This ensures the model learns from **genuine observational data only**.
 
-### Feature Categories (77 total)
+### Feature Categories
+
+**Baseline Model (9 features):**
+- Core stellar properties: koi_steff, koi_slogg, koi_srad, koi_kepmag
+- Core transit signals: koi_period, koi_depth, koi_duration, koi_impact, koi_model_snr
+
+**Full Model (52 features):**
 
 1. **Transit Signals**: Period, depth, duration, impact parameter
 2. **Stellar Properties**: Temperature, radius, mass, surface gravity, metallicity
@@ -128,18 +149,29 @@ This downloads the complete Kepler KOI dataset (153 columns) from NASA Exoplanet
 
 ### Web Application
 
-1. **Launch the app**: Run `streamlit run app.py` from the `src` directory
-2. **Choose input method**:
-   - **Sample Data**: Test with preprocessed samples
-   - **Upload CSV**: Upload preprocessed transit data (77 features required)
+**Live Demo**: [https://spaceapps-exoplanet-detector.streamlit.app/](https://spaceapps-exoplanet-detector.streamlit.app/)
 
-3. **View results**:
-   - Classification (Planet/Non-Planet)
-   - Confidence score
-   - Probability gauge visualization
-   - 3D interactive solar system visualization (Three.js)
-   - SHAP feature importance waterfall plots
-   - Model performance metrics
+The web application includes 6 main tabs:
+
+1. **🔍 Sample Explorer**: Interactive exploration of labeled KOIs with:
+   - 3D solar system visualization (default view)
+   - Star/planet size comparisons with Sun/Earth
+   - Prediction results with confidence gauges
+   - SHAP explainability analysis
+
+2. **🔮 Candidate Predictor**: Analyze unconfirmed candidate KOIs:
+   - Batch classification of all candidates
+   - Confidence distribution histogram
+   - High-confidence planet identification
+   - Downloadable results
+
+3. **📂 Import & Predict**: Upload custom CSV data for predictions
+
+4. **📊 Data Explorer**: Explore dataset statistics and distributions
+
+5. **📈 Model Performance**: View detailed performance metrics across train/val/test splits
+
+6. **📚 Documentation**: Complete project documentation and methodology
 
 ### Python API
 
@@ -200,12 +232,14 @@ This project was developed for the NASA Space Apps Challenge 2025, addressing th
 
 ### Challenge Goals Met
 ✅ Automated exoplanet detection from transit data
-✅ High-accuracy machine learning model (90.3% F1-score, 97.1% ROC-AUC)
+✅ High-accuracy machine learning models (87% accuracy, 94% ROC-AUC)
 ✅ Rigorous data leakage prevention for genuine learning
 ✅ Complete data pipeline (download → preprocess → train → deploy)
-✅ Interactive visualization and exploration tools
+✅ Interactive 3D visualizations with size comparisons
+✅ SHAP explainability for model interpretability
+✅ Candidate predictor for unconfirmed KOIs
 ✅ Open-source implementation with documentation
-✅ User-friendly web interface for predictions
+✅ **Deployed web application** on Streamlit Cloud
 
 ## 📚 References
 
@@ -232,4 +266,6 @@ For questions or collaboration opportunities, please open an issue on GitHub.
 
 ---
 
-**Note**: This project achieves 90.3% F1-score and 97.1% ROC-AUC on clean, leakage-free data. The model learns from genuine observational features only, making it suitable for real-world exoplanet vetting workflows.
+**Live Demo**: [https://spaceapps-exoplanet-detector.streamlit.app/](https://spaceapps-exoplanet-detector.streamlit.app/)
+
+**Note**: This project achieves 87% accuracy and 94% ROC-AUC on clean, leakage-free data. The model learns from genuine observational features only, making it suitable for real-world exoplanet vetting workflows.
