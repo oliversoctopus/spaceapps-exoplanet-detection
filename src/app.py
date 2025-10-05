@@ -118,6 +118,56 @@ def load_koi_names():
     except Exception as e:
         return None
 
+@st.cache_data
+def load_candidate_kois(model_type):
+    """Load KOIs marked as CANDIDATE (unconfirmed) for prediction"""
+    try:
+        # Load raw data
+        df_raw = pd.read_csv('../data/kepler_koi.csv', comment='#')
+
+        # Filter for candidates only
+        candidates_df = df_raw[df_raw['koi_disposition'] == 'CANDIDATE'].copy()
+
+        if len(candidates_df) == 0:
+            return None, None, None
+
+        # Load preprocessor
+        if model_type == "baseline":
+            with open('../data/preprocessing/baseline_preprocessor.pkl', 'rb') as f:
+                preprocessor = pickle.load(f)
+        else:
+            with open('../data/preprocessing/preprocessor.pkl', 'rb') as f:
+                preprocessor = pickle.load(f)
+
+        feature_cols = preprocessor['feature_columns']
+
+        # Check if all required features exist
+        missing_cols = set(feature_cols) - set(candidates_df.columns)
+        if missing_cols:
+            st.warning(f"Some features missing from raw data: {len(missing_cols)} columns")
+            return None, None, None
+
+        # Extract features
+        X_candidates = candidates_df[feature_cols].copy()
+
+        # Apply same preprocessing (imputation and scaling)
+        imputer = preprocessor['imputer']
+        scaler = preprocessor['scaler']
+
+        X_candidates_processed = imputer.transform(X_candidates)
+        X_candidates_processed = scaler.transform(X_candidates_processed)
+        X_candidates_processed = pd.DataFrame(X_candidates_processed, columns=feature_cols)
+
+        # Store metadata
+        metadata = candidates_df[['kepoi_name', 'koi_period', 'koi_depth', 'koi_prad', 'koi_steff']].copy()
+        metadata.reset_index(drop=True, inplace=True)
+
+        return X_candidates_processed, metadata, candidates_df.index.tolist()
+
+    except Exception as e:
+        st.error(f"Error loading candidates: {str(e)}")
+        return None, None, None
+
 @st.cache_resource
 def get_shap_explainer(_model, background_data):
     """Create SHAP explainer (cached to avoid recomputation)"""
@@ -201,12 +251,311 @@ def create_threejs_visualization(system_data, view_mode='system'):
     else:
         planet_color = '0xD2B48C'  # Gas Giant
 
+    # Different view modes
+    if view_mode == 'star':
+        # Star comparison view
+        scene_setup = f"""
+            // Star comparison: Host star vs Sun
+            const starProps = getStarProperties({star_temp});
+
+            // Host star (left)
+            const hostStarRadius = {star_radius} * 20;
+            const hostStarGeometry = new THREE.SphereGeometry(hostStarRadius, 64, 64);
+            const hostStarMaterial = new THREE.MeshBasicMaterial({{
+                color: starProps.color
+            }});
+            const hostStarMesh = new THREE.Mesh(hostStarGeometry, hostStarMaterial);
+
+            // Host star glow
+            const hostGlowGeometry = new THREE.SphereGeometry(hostStarRadius * 1.15, 64, 64);
+            const hostGlowMaterial = new THREE.MeshBasicMaterial({{
+                color: starProps.color,
+                transparent: true,
+                opacity: 0.3
+            }});
+            const hostGlow = new THREE.Mesh(hostGlowGeometry, hostGlowMaterial);
+            hostStarMesh.add(hostGlow);
+
+            // Sun (right, for comparison)
+            const sunRadius = 1.0 * 20;  // Same scale
+            const sunGeometry = new THREE.SphereGeometry(sunRadius, 64, 64);
+            const sunMaterial = new THREE.MeshBasicMaterial({{
+                color: 0xFDB813
+            }});
+            const sunMesh = new THREE.Mesh(sunGeometry, sunMaterial);
+
+            // Sun glow
+            const sunGlowGeometry = new THREE.SphereGeometry(sunRadius * 1.15, 64, 64);
+            const sunGlowMaterial = new THREE.MeshBasicMaterial({{
+                color: 0xFDB813,
+                transparent: true,
+                opacity: 0.3
+            }});
+            const sunGlow = new THREE.Mesh(sunGlowGeometry, sunGlowMaterial);
+            sunMesh.add(sunGlow);
+
+            // Position stars side by side
+            const spacing = Math.max(hostStarRadius, sunRadius) * 3;
+            hostStarMesh.position.x = -spacing / 2;
+            sunMesh.position.x = spacing / 2;
+
+            scene.add(hostStarMesh);
+            scene.add(sunMesh);
+
+            // Add text labels
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 512;
+            canvas.height = 128;
+
+            // Host star label
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Host Star', 256, 64);
+            const hostLabelTexture = new THREE.CanvasTexture(canvas);
+            const hostLabelMaterial = new THREE.SpriteMaterial({{ map: hostLabelTexture }});
+            const hostLabel = new THREE.Sprite(hostLabelMaterial);
+            hostLabel.position.set(-spacing / 2, -hostStarRadius - spacing * 0.2, 0);
+            hostLabel.scale.set(spacing * 0.4, spacing * 0.1, 1);
+            scene.add(hostLabel);
+
+            // Sun label
+            const canvas2 = document.createElement('canvas');
+            const ctx2 = canvas2.getContext('2d');
+            canvas2.width = 512;
+            canvas2.height = 128;
+            ctx2.fillStyle = 'white';
+            ctx2.font = 'bold 48px Arial';
+            ctx2.textAlign = 'center';
+            ctx2.fillText('Sun (Reference)', 256, 64);
+            const sunLabelTexture = new THREE.CanvasTexture(canvas2);
+            const sunLabelMaterial = new THREE.SpriteMaterial({{ map: sunLabelTexture }});
+            const sunLabel = new THREE.Sprite(sunLabelMaterial);
+            sunLabel.position.set(spacing / 2, -sunRadius - spacing * 0.2, 0);
+            sunLabel.scale.set(spacing * 0.4, spacing * 0.1, 1);
+            scene.add(sunLabel);
+
+            // Position camera
+            camera.position.set(0, spacing * 0.3, spacing * 1.2);
+            camera.lookAt(0, 0, 0);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 1);
+            scene.add(ambientLight);
+
+            // Animation
+            const clock = new THREE.Clock();
+            function animate() {{
+                requestAnimationFrame(animate);
+                const delta = clock.getDelta();
+                controls.update();
+
+                hostStarMesh.rotation.y += delta * 0.1;
+                sunMesh.rotation.y += delta * 0.1;
+
+                renderer.render(scene, camera);
+            }}
+        """
+    elif view_mode == 'planet':
+        # Planet comparison view
+        scene_setup = f"""
+            // Planet comparison: Exoplanet vs Earth
+
+            // Exoplanet (left)
+            const exoPlanetRadius = {planet_radius} * 2;
+            const exoPlanetGeometry = new THREE.SphereGeometry(exoPlanetRadius, 64, 64);
+            const exoPlanetMaterial = new THREE.MeshStandardMaterial({{
+                color: {planet_color},
+                roughness: 0.6,
+                metalness: 0.1
+            }});
+            const exoPlanetMesh = new THREE.Mesh(exoPlanetGeometry, exoPlanetMaterial);
+
+            // Earth (right, for comparison)
+            const earthRadius = 1.0 * 2;  // Same scale
+            const earthGeometry = new THREE.SphereGeometry(earthRadius, 64, 64);
+            const earthMaterial = new THREE.MeshStandardMaterial({{
+                color: 0x4F7CAC,
+                roughness: 0.6,
+                metalness: 0.1
+            }});
+            const earthMesh = new THREE.Mesh(earthGeometry, earthMaterial);
+
+            // Position planets side by side
+            const spacing = Math.max(exoPlanetRadius, earthRadius) * 3.5;
+            exoPlanetMesh.position.x = -spacing / 2;
+            earthMesh.position.x = spacing / 2;
+
+            scene.add(exoPlanetMesh);
+            scene.add(earthMesh);
+
+            // Add text labels
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 512;
+            canvas.height = 128;
+
+            // Exoplanet label
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Exoplanet', 256, 64);
+            const exoLabelTexture = new THREE.CanvasTexture(canvas);
+            const exoLabelMaterial = new THREE.SpriteMaterial({{ map: exoLabelTexture }});
+            const exoLabel = new THREE.Sprite(exoLabelMaterial);
+            exoLabel.position.set(-spacing / 2, -exoPlanetRadius - spacing * 0.15, 0);
+            exoLabel.scale.set(spacing * 0.35, spacing * 0.09, 1);
+            scene.add(exoLabel);
+
+            // Earth label
+            const canvas2 = document.createElement('canvas');
+            const ctx2 = canvas2.getContext('2d');
+            canvas2.width = 512;
+            canvas2.height = 128;
+            ctx2.fillStyle = 'white';
+            ctx2.font = 'bold 48px Arial';
+            ctx2.textAlign = 'center';
+            ctx2.fillText('Earth (Reference)', 256, 64);
+            const earthLabelTexture = new THREE.CanvasTexture(canvas2);
+            const earthLabelMaterial = new THREE.SpriteMaterial({{ map: earthLabelTexture }});
+            const earthLabel = new THREE.Sprite(earthLabelMaterial);
+            earthLabel.position.set(spacing / 2, -earthRadius - spacing * 0.15, 0);
+            earthLabel.scale.set(spacing * 0.35, spacing * 0.09, 1);
+            scene.add(earthLabel);
+
+            // Position camera
+            camera.position.set(0, spacing * 0.3, spacing * 1.2);
+            camera.lookAt(0, 0, 0);
+
+            // Simple, clean lighting from one direction
+            const mainLight = new THREE.DirectionalLight(0xffffff, 1.8);
+            mainLight.position.set(5, 3, 8);
+            scene.add(mainLight);
+
+            const ambientLight = new THREE.AmbientLight(0x606060, 0.6);
+            scene.add(ambientLight);
+
+            // Animation
+            const clock = new THREE.Clock();
+            function animate() {{
+                requestAnimationFrame(animate);
+                const delta = clock.getDelta();
+                controls.update();
+
+                exoPlanetMesh.rotation.y += delta * 0.2;
+                earthMesh.rotation.y += delta * 0.2;
+
+                renderer.render(scene, camera);
+            }}
+        """
+    else:  # system view
+        scene_setup = f"""
+            // Full solar system view
+            const starProps = getStarProperties({star_temp});
+
+            // Create planet with size capping to prevent overlap
+            let planetRadius = Math.max({planet_radius}, 0.5);
+
+            // Cap planet radius to prevent it from being larger than the star
+            const starRadius = {star_radius} * 15;
+            const maxPlanetRadius = starRadius * 0.6;
+            if (planetRadius > maxPlanetRadius) {{
+                planetRadius = maxPlanetRadius;
+            }}
+
+            // Create star
+            const starGeometry = new THREE.SphereGeometry(starRadius, 64, 64);
+            const starMaterial = new THREE.MeshBasicMaterial({{
+                color: starProps.color,
+                emissive: starProps.color,
+                emissiveIntensity: 0.8
+            }});
+            const starMesh = new THREE.Mesh(starGeometry, starMaterial);
+
+            // Star glow
+            const starGlowGeometry = new THREE.SphereGeometry(starRadius * 1.2, 64, 64);
+            const starGlowMaterial = new THREE.MeshBasicMaterial({{
+                color: starProps.color,
+                transparent: true,
+                opacity: 0.3
+            }});
+            const starGlow = new THREE.Mesh(starGlowGeometry, starGlowMaterial);
+            starMesh.add(starGlow);
+
+            // Create planet
+            const planetGeometry = new THREE.SphereGeometry(planetRadius, 32, 32);
+            const planetMaterial = new THREE.MeshStandardMaterial({{
+                color: {planet_color},
+                roughness: 0.8,
+                metalness: 0.1
+            }});
+            const planetMesh = new THREE.Mesh(planetGeometry, planetMaterial);
+
+            // Position objects - ensure enough separation
+            const minSeparation = (starRadius + planetRadius) * 1.5;
+            const separation = Math.max(starRadius + 30, minSeparation);
+            starMesh.position.x = -separation / 2;
+            planetMesh.position.x = separation / 2;
+
+            scene.add(starMesh);
+            scene.add(planetMesh);
+
+            // Lighting
+            const mainLight = new THREE.PointLight(0xffffff, starProps.intensity * 800, 3000);
+            mainLight.position.copy(starMesh.position);
+            scene.add(mainLight);
+
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.3);
+            scene.add(ambientLight);
+
+            // Create orbital path
+            const orbitRadius = separation;
+            const orbitGeometry = new THREE.BufferGeometry();
+            const orbitPoints = [];
+            for (let i = 0; i <= 100; i++) {{
+                const angle = (i / 100) * Math.PI * 2;
+                orbitPoints.push(
+                    starMesh.position.x + Math.cos(angle) * orbitRadius,
+                    0,
+                    Math.sin(angle) * orbitRadius
+                );
+            }}
+            orbitGeometry.setAttribute('position', new THREE.Float32BufferAttribute(orbitPoints, 3));
+            const orbitMaterial = new THREE.LineBasicMaterial({{
+                color: 0x888888,
+                transparent: true,
+                opacity: 0.5
+            }});
+            const orbitLine = new THREE.Line(orbitGeometry, orbitMaterial);
+            scene.add(orbitLine);
+
+            // Position camera
+            camera.position.set(50, 30, 80);
+            camera.lookAt(0, 0, 0);
+
+            // Animation
+            const clock = new THREE.Clock();
+            function animate() {{
+                requestAnimationFrame(animate);
+                const delta = clock.getDelta();
+                controls.update();
+
+                starMesh.rotation.y += delta * 0.1;
+                planetMesh.rotation.y += delta * 0.3;
+
+                const time = clock.getElapsedTime() * 0.2;
+                planetMesh.position.x = starMesh.position.x + Math.cos(time) * orbitRadius;
+                planetMesh.position.z = Math.sin(time) * orbitRadius;
+
+                renderer.render(scene, camera);
+            }}
+        """
+
     html_code = f"""
     <!DOCTYPE html>
     <html>
     <head>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
         <style>
             body {{ margin: 0; overflow: hidden; background: #0a0a0a; }}
             #container {{ width: 100%; height: 600px; background: #000; }}
@@ -214,44 +563,61 @@ def create_threejs_visualization(system_data, view_mode='system'):
     </head>
     <body>
         <div id="container"></div>
-        <script>
+        <script type="importmap">
+        {{
+            "imports": {{
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }}
+        }}
+        </script>
+        <script type="module">
+            import * as THREE from 'three';
+            import {{ OrbitControls }} from 'three/addons/controls/OrbitControls.js';
+
             console.log('Three.js script starting...');
-            console.log('THREE object:', typeof THREE);
 
             const container = document.getElementById('container');
             console.log('Container dimensions:', container.clientWidth, container.clientHeight);
 
+            // Scene setup
             const scene = new THREE.Scene();
-            const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 2000);
-            camera.position.set(0, 0, 100);
+            scene.background = new THREE.Color(0x000000);
+
+            // Camera setup
+            const camera = new THREE.PerspectiveCamera(
+                75,
+                container.clientWidth / container.clientHeight,
+                0.1,
+                2000
+            );
+            camera.position.set(50, 30, 80);
             camera.lookAt(0, 0, 0);
 
-            console.log('Camera created at:', camera.position);
-
-            const renderer = new THREE.WebGLRenderer({{ antialias: true, alpha: true }});
+            // Renderer setup
+            const renderer = new THREE.WebGLRenderer({{ antialias: true }});
             renderer.setSize(container.clientWidth, container.clientHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.autoClear = false;
             container.appendChild(renderer.domElement);
 
-            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            // Controls
+            const controls = new OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
 
             // Starfield background
-            const starfieldScene = new THREE.Scene();
             const starVertices = [];
             for (let i = 0; i < 10000; i++) {{
-                starVertices.push(
-                    THREE.MathUtils.randFloatSpread(2000),
-                    THREE.MathUtils.randFloatSpread(2000),
-                    THREE.MathUtils.randFloatSpread(2000)
-                );
+                const x = (Math.random() - 0.5) * 2000;
+                const y = (Math.random() - 0.5) * 2000;
+                const z = (Math.random() - 0.5) * 2000;
+                starVertices.push(x, y, z);
             }}
-            const starGeometry = new THREE.BufferGeometry();
-            starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
-            const starMaterial = new THREE.PointsMaterial({{ color: 0xaaaaaa, size: 0.2 }});
-            const stars = new THREE.Points(starGeometry, starMaterial);
-            starfieldScene.add(stars);
+            const starfieldGeometry = new THREE.BufferGeometry();
+            starfieldGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+            const starfieldMaterial = new THREE.PointsMaterial({{ color: 0xffffff, size: 0.5 }});
+            const stars = new THREE.Points(starfieldGeometry, starfieldMaterial);
+            scene.add(stars);
 
             // Get star properties based on temperature
             function getStarProperties(temp) {{
@@ -262,67 +628,8 @@ def create_threejs_visualization(system_data, view_mode='system'):
                 return {{ color: 0xff8c5a, intensity: 1.2 }};
             }}
 
-            const activeGroup = new THREE.Group();
-            const starProps = getStarProperties({star_temp});
-
-            // Create star
-            const starRadius = {star_radius} * 15;
-            const starGeometry = new THREE.SphereGeometry(starRadius, 64, 64);
-            const starMaterial = new THREE.MeshBasicMaterial({{ color: starProps.color }});
-            const starMesh = new THREE.Mesh(starGeometry, starMaterial);
-
-            // Create planet
-            const planetRadius = {planet_radius};
-            const planetGeometry = new THREE.SphereGeometry(planetRadius, 32, 32);
-            const planetMaterial = new THREE.MeshStandardMaterial({{
-                color: {planet_color},
-                roughness: 0.8,
-                metalness: 0.1
-            }});
-            const planetMesh = new THREE.Mesh(planetGeometry, planetMaterial);
-
-            // Add light source inside the star
-            const mainLight = new THREE.PointLight(0xffffff, starProps.intensity, 1000);
-            starMesh.add(mainLight);
-
-            // Add ambient light so objects are visible
-            const ambientLight = new THREE.AmbientLight(0x404040, 1);
-            scene.add(ambientLight);
-
-            const separation = starRadius + planetRadius + 20;
-            starMesh.position.x = -separation / 2;
-            planetMesh.position.x = separation / 2;
-
-            activeGroup.add(starMesh, planetMesh);
-            scene.add(activeGroup);
-
-            console.log('Star radius:', starRadius);
-            console.log('Planet radius:', planetRadius);
-            console.log('Separation:', separation);
-            console.log('Objects added to scene');
-
-            // Add a bright test sphere at origin to verify rendering
-            const testGeom = new THREE.SphereGeometry(5, 32, 32);
-            const testMat = new THREE.MeshBasicMaterial({{ color: 0xff0000 }});
-            const testSphere = new THREE.Mesh(testGeom, testMat);
-            scene.add(testSphere);
-            console.log('Test red sphere added at origin');
-
-            // Animation loop
-            const clock = new THREE.Clock();
-            function animate() {{
-                requestAnimationFrame(animate);
-                const delta = clock.getDelta();
-                controls.update();
-
-                activeGroup.children[0].rotation.y += delta * 0.02; // Star rotation
-                activeGroup.children[1].rotation.y += delta * 0.1;  // Planet rotation
-
-                renderer.clear();
-                renderer.render(starfieldScene, camera);
-                renderer.clearDepth();
-                renderer.render(scene, camera);
-            }}
+            // View-specific scene setup
+            {scene_setup}
             animate();
 
             // Handle window resize
@@ -695,7 +1002,7 @@ def main():
         """)
 
     # Main content tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔍 Sample Explorer", "📂 Import & Predict", "📊 Data Explorer", "📈 Model Performance", "📚 Documentation"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🔍 Sample Explorer", "🔮 Candidate Predictor", "📂 Import & Predict", "📊 Data Explorer", "📈 Model Performance", "📚 Documentation"])
 
     with tab1:
         st.header("🔍 Sample Explorer & Analysis")
@@ -772,17 +1079,20 @@ def main():
                 if 'zoom_level' not in st.session_state:
                     st.session_state.zoom_level = 'system'
 
-                # Zoom controls (before visualization so they can update state)
+                # View controls (before visualization so they can update state)
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    if st.button("🌟 Zoom to Star", key="zoom_star"):
+                    if st.button("🌟 View Star", key="zoom_star"):
                         st.session_state.zoom_level = 'star'
+                        st.rerun()
                 with col2:
-                    if st.button("🌍 Zoom to Planet", key="zoom_planet"):
+                    if st.button("🌍 View Planet", key="zoom_planet"):
                         st.session_state.zoom_level = 'planet'
+                        st.rerun()
                 with col3:
                     if st.button("🔭 Full System View", key="zoom_system"):
                         st.session_state.zoom_level = 'system'
+                        st.rerun()
 
                 system_data = get_system_data(sample_idx, system_data_all)
 
@@ -887,6 +1197,142 @@ def main():
             st.warning("Sample data not available.")
 
     with tab2:
+        st.header("🔮 Candidate KOI Predictor")
+        st.markdown("""
+        This tool analyzes **unconfirmed candidate** KOIs from the Kepler dataset and predicts
+        whether they are likely to be real exoplanets or false positives based on the trained model.
+        """)
+
+        # Load candidate data
+        X_candidates, metadata, original_indices = load_candidate_kois(model_type)
+
+        if X_candidates is not None and metadata is not None:
+            st.success(f"✅ Loaded {len(X_candidates)} candidate KOIs for analysis")
+
+            # Overview metrics
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Candidates", len(X_candidates))
+            with col2:
+                avg_period = metadata['koi_period'].mean()
+                st.metric("Avg Orbital Period", f"{avg_period:.1f} days")
+            with col3:
+                avg_depth = metadata['koi_depth'].mean()
+                st.metric("Avg Transit Depth", f"{avg_depth:.0f} ppm")
+
+            # Classify all button
+            if st.button("🔮 Classify All Candidates", type="primary", key="classify_all_candidates"):
+                with st.spinner("Analyzing all candidates..."):
+                    # Make predictions
+                    predictions = model.predict(X_candidates)
+                    probabilities = model.predict_proba(X_candidates)[:, 1]
+
+                    # Add predictions to metadata
+                    results_df = metadata.copy()
+                    results_df['Prediction'] = ['Planet' if p == 1 else 'Non-Planet' for p in predictions]
+                    results_df['Planet_Probability'] = probabilities
+                    results_df['Confidence'] = np.maximum(probabilities, 1 - probabilities)
+
+                    # Sort by confidence (most confident predictions first)
+                    results_df = results_df.sort_values('Confidence', ascending=False)
+
+                    # Summary statistics
+                    st.markdown("---")
+                    st.subheader("📊 Classification Summary")
+
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        planet_count = sum(predictions)
+                        st.metric("Predicted Planets", planet_count)
+                    with col2:
+                        non_planet_count = len(predictions) - planet_count
+                        st.metric("Predicted Non-Planets", non_planet_count)
+                    with col3:
+                        high_conf_planets = sum((predictions == 1) & (probabilities > 0.9))
+                        st.metric("High Confidence Planets", high_conf_planets)
+                        st.caption("(>90% probability)")
+                    with col4:
+                        avg_conf = results_df['Confidence'].mean()
+                        st.metric("Avg Confidence", f"{avg_conf:.1%}")
+
+                    # Confidence distribution
+                    st.markdown("### Confidence Distribution")
+                    fig_conf = go.Figure()
+                    fig_conf.add_trace(go.Histogram(
+                        x=probabilities,
+                        nbinsx=30,
+                        name="Planet Probability",
+                        marker_color='#60a5fa'
+                    ))
+                    fig_conf.update_layout(
+                        xaxis_title="Planet Probability",
+                        yaxis_title="Number of Candidates",
+                        height=300,
+                        paper_bgcolor='#1F2937',
+                        plot_bgcolor='#374151',
+                        font=dict(color='#F3F4F6')
+                    )
+                    st.plotly_chart(fig_conf, use_container_width=True)
+
+                    # Results table
+                    st.markdown("### 🎯 Top Predictions (Sorted by Confidence)")
+                    st.markdown("**High-confidence predictions** are shown first. These are the most reliable classifications.")
+
+                    # Format the display
+                    display_df = results_df[['kepoi_name', 'Prediction', 'Planet_Probability', 'Confidence', 'koi_period', 'koi_depth', 'koi_prad', 'koi_steff']].copy()
+                    display_df.columns = ['KOI Name', 'Prediction', 'Planet Prob.', 'Confidence', 'Period (days)', 'Depth (ppm)', 'Radius (Earth)', 'Star Temp (K)']
+
+                    # Color code by prediction
+                    def highlight_prediction(row):
+                        if row['Prediction'] == 'Planet':
+                            return ['background-color: #1e3a5f'] * len(row)
+                        else:
+                            return ['background-color: #3a1e1e'] * len(row)
+
+                    st.dataframe(
+                        display_df.head(50).style.format({
+                            'Planet Prob.': '{:.1%}',
+                            'Confidence': '{:.1%}',
+                            'Period (days)': '{:.2f}',
+                            'Depth (ppm)': '{:.0f}',
+                            'Radius (Earth)': '{:.2f}',
+                            'Star Temp (K)': '{:.0f}'
+                        }),
+                        use_container_width=True,
+                        height=400
+                    )
+
+                    # Download results
+                    csv = results_df.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download Full Results as CSV",
+                        data=csv,
+                        file_name=f"candidate_predictions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv"
+                    )
+
+                    # Interesting findings
+                    st.markdown("---")
+                    st.markdown("### 🌟 Noteworthy Findings")
+
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        st.markdown("**🌍 Top 5 Most Likely Planets:**")
+                        top_planets = results_df[results_df['Prediction'] == 'Planet'].head(5)
+                        for idx, row in top_planets.iterrows():
+                            st.markdown(f"- **{row['kepoi_name']}**: {row['Planet_Probability']:.1%} confidence")
+
+                    with col2:
+                        st.markdown("**❌ Top 5 Most Likely False Positives:**")
+                        top_non_planets = results_df[results_df['Prediction'] == 'Non-Planet'].head(5)
+                        for idx, row in top_non_planets.iterrows():
+                            st.markdown(f"- **{row['kepoi_name']}**: {(1-row['Planet_Probability']):.1%} confidence")
+
+        else:
+            st.warning("⚠️ Could not load candidate KOIs. Please ensure the dataset is available.")
+
+    with tab3:
         st.header("📂 Import & Predict on CSV Data")
         st.markdown("""
         Upload your own preprocessed exoplanet transit data to get predictions from the model.
@@ -949,7 +1395,7 @@ def main():
             except Exception as e:
                 st.error(f"❌ Error processing file: {str(e)}")
 
-    with tab3:
+    with tab4:
         st.header("Data Explorer")
 
         if X_data is not None:
@@ -984,7 +1430,7 @@ def main():
             fig.update_layout(height=600, title_text="Feature Distributions")
             st.plotly_chart(fig, use_container_width=True)
 
-    with tab4:
+    with tab5:
         st.header("Model Performance Analysis")
 
         # Metrics comparison across splits
@@ -1032,7 +1478,7 @@ def main():
             st.subheader("Model Information")
             st.json(metrics['model_params'])
 
-    with tab5:
+    with tab6:
         st.header("Documentation")
 
         model_description = "Baseline (9 features)" if model_type == "baseline" else "Full (52 features, optimized)"
